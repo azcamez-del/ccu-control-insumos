@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User, Movimiento } from '../types';
 import { formatearFecha } from '../utils';
-import { RefreshCw, Download, Trash, Search } from 'lucide-react';
+import { RefreshCw, Download, Trash, Search, ShieldAlert } from 'lucide-react';
 
 interface DatabaseTabProps {
   user: User;
@@ -24,6 +24,9 @@ export default function DatabaseTab({
   const [searchTerm, setSearchTerm] = useState('');
   const [fechaIni, setFechaIni] = useState('');
   const [fechaFin, setFechaFin] = useState('');
+  
+  // NUEVO: Interruptor de la bóveda de auditoría
+  const [showAuditVault, setShowAuditVault] = useState(false);
 
   const isRespSalidas = user.role === 'responsable_salidas';
   const isRespEntradas = user.role === 'responsable_entradas';
@@ -32,8 +35,15 @@ export default function DatabaseTab({
 
   // Perform advanced record filtering depending on search, dates, and role permissions
   const filteredMovs = movimientos.filter(m => {
-    // Audit protection: normal users don't see deleted records to prevent UI clutter, admin/supervisor see deletions
-    if (!isAdmin && !isSup && m.eliminado) return false;
+    // --- MAGIA DE LA BÓVEDA DE AUDITORÍA ---
+    if (showAuditVault) {
+      // Si estamos en la bóveda, SOLO mostramos los que fueron eliminados
+      if (!m.eliminado) return false;
+    } else {
+      // Si estamos en la vista normal, OCULTAMOS los eliminados para TODOS (la vista queda limpia)
+      if (m.eliminado) return false;
+    }
+    // ---------------------------------------
 
     // Isolate activities for the logged-in field personnel to avoid overlapping logs
     if (isRespSalidas && (m.tipo !== 'SALIDA' || m.registradoPor !== user.name)) return false;
@@ -65,9 +75,13 @@ export default function DatabaseTab({
   });
 
   const handleExportCSV = () => {
-    const validMovs = movimientos.filter(m => !m.eliminado);
+    // NUEVO: Exporta lo que estás viendo. Si estás en la bóveda, exporta los eliminados.
+    const validMovs = showAuditVault 
+      ? movimientos.filter(m => m.eliminado) 
+      : movimientos.filter(m => !m.eliminado);
+
     if (validMovs.length === 0) {
-      showToast('No se cuenta con transacciones vigentes para exportar', 'error');
+      showToast('No se cuenta con transacciones vigentes para exportar en esta vista', 'error');
       return;
     }
     
@@ -116,10 +130,11 @@ export default function DatabaseTab({
       })
       .join('\n');
 
+    const prefix = showAuditVault ? 'REPORTE_AUDITORIA_ELIMINADOS_' : 'CCU_Bitacora_General_';
     const blob = new Blob([bom + header + rows], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `CCU_Bitacora_General_${user.module}_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `${prefix}${user.module}_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     showToast('Historial descargado correctamente', 'success');
   };
@@ -141,11 +156,13 @@ export default function DatabaseTab({
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#ddd9d0] gap-4">
         <div>
-          <h2 className="text-xl md:text-2xl font-bold font-sans text-gray-900">
-            Historial de Movimientos
+          <h2 className={`text-xl md:text-2xl font-bold font-sans ${showAuditVault ? 'text-purple-800' : 'text-gray-900'}`}>
+            {showAuditVault ? '🛡️ Bóveda de Auditoría (Eliminados)' : 'Historial de Movimientos'}
           </h2>
           <p className="text-xs md:text-sm text-gray-500 mt-1">
-            Bitácora de todos los registros del almacén. Los administradores pueden auditar eliminaciones.
+            {showAuditVault 
+              ? 'Área restringida. Visualizando registros anulados por el personal.' 
+              : 'Bitácora de todos los registros válidos del almacén.'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -156,6 +173,18 @@ export default function DatabaseTab({
             <RefreshCw size={13} />
             Sincronizar
           </button>
+          
+          {/* NUEVO: Botón de la bóveda solo para Administradores */}
+          {isAdmin && (
+            <button
+              onClick={() => setShowAuditVault(!showAuditVault)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border flex items-center gap-1.5 cursor-pointer transition-colors ${showAuditVault ? 'bg-purple-600 text-white border-purple-700 hover:bg-purple-700' : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'}`}
+            >
+              <ShieldAlert size={13} />
+              {showAuditVault ? 'Salir de Bóveda' : 'Auditar Eliminados'}
+            </button>
+          )}
+
           {isAdmin && (
             <>
               <button
@@ -163,7 +192,7 @@ export default function DatabaseTab({
                 className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-50 border border-gray-300 text-gray-700 hover:bg-gray-100 flex items-center gap-1.5 cursor-pointer"
               >
                 <Download size={13} />
-                Exportar Historial
+                {showAuditVault ? 'Exportar Auditoría' : 'Exportar Historial'}
               </button>
               <button
                 onClick={handleClearHistoryConfirm}
@@ -224,10 +253,12 @@ export default function DatabaseTab({
       </div>
 
       {/* Database History Table Wrapping Card */}
-      <div className="bg-white border border-[#ddd9d0] rounded-xl shadow-sm overflow-hidden">
+      <div className={`bg-white border rounded-xl shadow-sm overflow-hidden ${showAuditVault ? 'border-purple-300' : 'border-[#ddd9d0]'}`}>
         {filteredMovs.length === 0 ? (
           <div className="text-center py-12 text-gray-400">
-            <p className="text-sm md:text-base font-semibold">No se encontraron registros cargados.</p>
+            <p className="text-sm md:text-base font-semibold">
+              {showAuditVault ? 'No hay registros eliminados en la bóveda.' : 'No se encontraron registros cargados.'}
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -245,7 +276,8 @@ export default function DatabaseTab({
                   )}
                   <th className="px-4 py-3.5">Comentarios</th>
                   <th className="px-4 py-3.5">Usuario</th>
-                  {(isAdmin || isSup) && <th className="px-4 py-3.5 text-center">Acciones</th>}
+                  {/* NUEVO: La columna de acciones ahora es visible para todos, para que el responsable pueda borrar */}
+                  <th className="px-4 py-3.5 text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#ddd9d0] whitespace-nowrap">
@@ -260,7 +292,7 @@ export default function DatabaseTab({
                   return (
                     <tr 
                       key={m.id} 
-                      className={`hover:bg-gray-50 transition-colors ${isRowDeleted ? 'opacity-50 bg-red-50 text-red-800 line-through' : ''}`}
+                      className={`hover:bg-gray-50 transition-colors ${isRowDeleted ? 'bg-red-50 text-red-800' : ''}`}
                     >
                       {/* Register Date */}
                       <td className="px-4 py-3.5 font-mono text-[11px] text-gray-600">
@@ -322,7 +354,7 @@ export default function DatabaseTab({
                         {m.notas || ''}
                         {isRowDeleted && (
                           <div className="text-[10px] text-red-600 font-bold border-t border-red-200 pt-0.5 mt-1">
-                            🗑️ Eliminado por: {m.eliminadoPor}
+                            🗑️ Anulado por: {m.eliminadoPor}
                           </div>
                         )}
                       </td>
@@ -332,22 +364,20 @@ export default function DatabaseTab({
                         {m.registradoPor}
                       </td>
 
-                      {/* Admin/Supervisor Delete Trigger */}
-                      {(isAdmin || isSup) && (
-                        <td className="px-4 py-3.5 text-center">
-                          {!isRowDeleted ? (
-                            <button
-                              onClick={() => onDeleteMovimiento(m.id)}
-                              title="Anular Movimiento"
-                              className="inline-flex items-center justify-center w-7 h-7 rounded bg-red-50 hover:bg-red-100 text-red-600 hover:border-red-350 border border-red-100 transition-all cursor-pointer"
-                            >
-                              ✕
-                            </button>
-                          ) : (
-                            <span className="text-xs font-mono text-red-500 font-bold uppercase">Anulado</span>
-                          )}
-                        </td>
-                      )}
+                      {/* NUEVO: Botón de eliminar habilitado para todos, pero muestra "ANULADO" si ya se borró */}
+                      <td className="px-4 py-3.5 text-center">
+                        {!isRowDeleted ? (
+                          <button
+                            onClick={() => onDeleteMovimiento(m.id)}
+                            title="Anular Movimiento"
+                            className="inline-flex items-center justify-center w-7 h-7 rounded bg-red-50 hover:bg-red-100 text-red-600 hover:border-red-350 border border-red-100 transition-all cursor-pointer"
+                          >
+                            ✕
+                          </button>
+                        ) : (
+                          <span className="text-xs font-mono text-red-500 font-bold uppercase">Anulado</span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}

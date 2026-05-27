@@ -236,6 +236,7 @@ export default function App() {
       unidad: string;
       area: string;
       notas: string;
+      fecha?: string; // <-- AQUI AGREGAMOS LA FECHA RETROACTIVA
       prov?: string;
       fact?: string;
       shadowUnit?: string;
@@ -278,7 +279,7 @@ export default function App() {
       const dataToSave: any = {
         id: timestamp + index + Math.random(),
         tipo: activeTab === 'captura' ? 'SALIDA' : 'ENTRADA',
-        fecha: new Date().toISOString().split('T')[0], // Enforces current local date
+        fecha: i.fecha || new Date().toISOString().split('T')[0], // <-- AQUI LIBERAMOS EL CANDADO DE LA FECHA
         cantidad: Math.floor(Number(i.cantidad) || 0),
         descripcion: i.descripcion.trim().toUpperCase(),
         unidad: i.unidad.trim().toUpperCase(),
@@ -563,17 +564,14 @@ export default function App() {
           Historial
         </button>
 
-        {activeTab === 'areas' && (isAdmin || isSup || isRespEntradas || isRespSalidas) && (
-          <AreasTab
-            user={currentUser}
-            areas={areasMaestras}
-            proveedores={proveedoresMaestros}
-            onAddArea={handleAddArea}
-            onRemoveArea={handleRemoveArea}
-            onAddProv={handleAddProv}
-            onRemoveProv={handleRemoveProv}
-            showToast={showToast}
-          />
+        {(isAdmin || isSup || isRespEntradas || isRespSalidas) && (
+          <button
+            onClick={() => setActiveTab('areas')}
+            className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'areas' ? 'border-blue-650 text-blue-601 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+          >
+            <MapPin size={15} />
+            {isCompras ? 'Áreas / Proveedores' : 'Áreas'}
+          </button>
         )}
 
         {(isAdmin || isSup) && (
@@ -633,7 +631,7 @@ export default function App() {
           />
         )}
 
-{activeTab === 'areas' && (isAdmin || isSup || isRespEntradas || isRespSalidas) && (
+        {activeTab === 'areas' && (isAdmin || isSup || isRespEntradas || isRespSalidas) && (
           <AreasTab
             user={currentUser}
             areas={areasMaestras}

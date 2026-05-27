@@ -14,6 +14,7 @@ interface MovementCaptureProps {
       unidad: string;
       area: string;
       notas: string;
+      fecha?: string; // <-- AQUI AVISAMOS QUE SE PUEDE MANDAR LA FECHA
       prov?: string;
       fact?: string;
       fechaFact?: string;
@@ -223,7 +224,8 @@ export default function MovementCapture({
         descripcion: desc,
         unidad: unit,
         area: targetArea || 'ALMACÉN / EXTERNO',
-        notas: row.notes || row.notas.trim().toUpperCase() || '',
+        notas: row.notas.trim().toUpperCase() || '', // Usar row.notas directamente, tenías row.notes
+        fecha: fecha, // <--- AQUI CONECTAMOS EL CABLE PARA ENVIAR LA FECHA ELEGIDA
         prov: rProv,
         fact: rFact,
         fechaFact: row.fechaFact,

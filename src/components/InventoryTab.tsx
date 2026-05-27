@@ -17,6 +17,9 @@ export default function InventoryTab({
   showToast
 }: InventoryTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // NUEVO: Validación de seguridad para saber si es Administrador
+  const isAdmin = user.role === 'admin';
 
   // Sift inventory items based on search query
   const filteredInventory = inventory.filter(item =>
@@ -137,7 +140,8 @@ export default function InventoryTab({
                   <th className="px-5 py-3.5 text-right">Salidas</th>
                   <th className="px-5 py-3.5 text-right text-blue-600 font-bold">Stock Actual</th>
                   <th className="px-5 py-3.5 text-center">Alerta</th>
-                  <th className="px-5 py-3.5 text-center print:hidden">Acciones</th>
+                  {/* NUEVO: Ocultamos el título de la columna si no es Admin */}
+                  {isAdmin && <th className="px-5 py-3.5 text-center print:hidden">Acciones</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#ddd9d0] whitespace-nowrap">
@@ -208,16 +212,18 @@ export default function InventoryTab({
                         {alertTag}
                       </td>
 
-                      {/* Adjustment Tools button */}
-                      <td className="px-5 py-3.5 text-center print:hidden">
-                        <button
-                          onClick={() => onOpenAdjustment({ descripcion: item.descripcion, unidad: item.unidad })}
-                          className="btn btn-secondary inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md text-gray-750 bg-[#f5f3ee] hover:bg-gray-200 border border-[#ddd9d0] cursor-pointer"
-                        >
-                          <Scale size={12} />
-                          Ajuste
-                        </button>
-                      </td>
+                      {/* NUEVO: Ocultamos el botón de ajuste si no es Admin */}
+                      {isAdmin && (
+                        <td className="px-5 py-3.5 text-center print:hidden">
+                          <button
+                            onClick={() => onOpenAdjustment({ descripcion: item.descripcion, unidad: item.unidad })}
+                            className="btn btn-secondary inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md text-gray-750 bg-[#f5f3ee] hover:bg-gray-200 border border-[#ddd9d0] cursor-pointer"
+                          >
+                            <Scale size={12} />
+                            Ajuste
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

@@ -563,7 +563,7 @@ export default function App() {
           Historial
         </button>
 
-        {isAdmin && (
+        {(isAdmin || isSup || isRespEntradas || isRespSalidas) && (
           <button
             onClick={() => setActiveTab('areas')}
             className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'areas' ? 'border-blue-650 text-blue-601 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
@@ -630,7 +630,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'areas' && isAdmin && (
+{activeTab === 'areas' && (isAdmin || isSup || isRespEntradas || isRespSalidas) && (
           <AreasTab
             user={currentUser}
             areas={areasMaestras}

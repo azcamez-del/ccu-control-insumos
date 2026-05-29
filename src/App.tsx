@@ -187,17 +187,28 @@ export default function App() {
     }
   };
 
+  // AQUÍ ESTÁ LA MAGIA: Ahora solo borra los registros de la Bóveda (eliminado: true)
   const handleClearHistory = async () => {
     if (!currentUser) return;
-    if (confirm("⚠️ ¿Estás seguro de que deseas vaciar por completo el historial de movimientos de este módulo de la nube? Esta acción no se puede deshacer.")) {
-      const moduleId = currentUser.module;
-      for (const m of movimientos) {
-        if (m.docId) {
-          try { await deleteDoc(doc(db, 'modules', moduleId, 'movimientos', m.docId)); } catch (err) {}
-        }
-      }
-      showToast('Se eliminaron todos los movimientos de la nube', 'info');
+    
+    // Filtramos para obtener SOLO los registros que ya fueron anulados
+    const eliminados = movimientos.filter(m => m.eliminado);
+    
+    if (eliminados.length === 0) {
+      showToast('La bóveda ya está vacía', 'info');
+      return;
     }
+
+    const moduleId = currentUser.module;
+    // Borramos UNICAMENTE los registros filtrados de la base de datos
+    for (const m of eliminados) {
+      if (m.docId) {
+        try {
+          await deleteDoc(doc(db, 'modules', moduleId, 'movimientos', m.docId));
+        } catch (err) {}
+      }
+    }
+    showToast('La Bóveda de Eliminados se vació permanentemente', 'success');
   };
 
   const handleAddArea = async (area: string) => {

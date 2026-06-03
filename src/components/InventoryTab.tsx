@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { User, UNIDADES } from '../types';
 import { InventoryItem } from '../utils';
-import { Search, Printer, Download, Scale } from 'lucide-react';
+import { Search, Printer, Download, Scale, Trash } from 'lucide-react';
 
 interface InventoryTabProps {
   user: User;
   inventory: InventoryItem[];
   onOpenAdjustment: (item: { descripcion: string; unidad: string }) => void;
+  onDeleteProduct: (descripcion: string, unidad: string) => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'warn' | 'info') => void;
 }
 
@@ -14,11 +15,12 @@ export default function InventoryTab({
   user,
   inventory,
   onOpenAdjustment,
+  onDeleteProduct,
   showToast
 }: InventoryTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   
-  // NUEVO: Validación de seguridad para saber si es Administrador
+  // Validación de seguridad para saber si es Administrador
   const isAdmin = user.role === 'admin';
 
   // Sift inventory items based on search query
@@ -140,7 +142,6 @@ export default function InventoryTab({
                   <th className="px-5 py-3.5 text-right">Salidas</th>
                   <th className="px-5 py-3.5 text-right text-blue-600 font-bold">Stock Actual</th>
                   <th className="px-5 py-3.5 text-center">Alerta</th>
-                  {/* NUEVO: Ocultamos el título de la columna si no es Admin */}
                   {isAdmin && <th className="px-5 py-3.5 text-center print:hidden">Acciones</th>}
                 </tr>
               </thead>
@@ -212,16 +213,26 @@ export default function InventoryTab({
                         {alertTag}
                       </td>
 
-                      {/* NUEVO: Ocultamos el botón de ajuste si no es Admin */}
+                      {/* Botones de Acción (Solo Admin) */}
                       {isAdmin && (
                         <td className="px-5 py-3.5 text-center print:hidden">
-                          <button
-                            onClick={() => onOpenAdjustment({ descripcion: item.descripcion, unidad: item.unidad })}
-                            className="btn btn-secondary inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md text-gray-750 bg-[#f5f3ee] hover:bg-gray-200 border border-[#ddd9d0] cursor-pointer"
-                          >
-                            <Scale size={12} />
-                            Ajuste
-                          </button>
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => onOpenAdjustment({ descripcion: item.descripcion, unidad: item.unidad })}
+                              className="btn btn-secondary inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md text-gray-750 bg-[#f5f3ee] hover:bg-gray-200 border border-[#ddd9d0] cursor-pointer"
+                            >
+                              <Scale size={12} />
+                              Ajuste
+                            </button>
+                            <button
+                              onClick={() => onDeleteProduct(item.descripcion, item.unidad)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 cursor-pointer transition-colors"
+                              title="Eliminar del catálogo maestro"
+                            >
+                              <Trash size={12} />
+                              Borrar
+                            </button>
+                          </div>
                         </td>
                       )}
                     </tr>

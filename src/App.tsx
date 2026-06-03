@@ -209,6 +209,22 @@ export default function App() {
     showToast('La Bóveda de Eliminados se vació permanentemente', 'success');
   };
 
+  // NUEVO: COMANDO PARA BORRAR PRODUCTOS DEL CATÁLOGO
+  const handleDeleteProduct = async (descripcion: string, unidad: string) => {
+    if (!currentUser) return;
+    if (confirm(`⚠️ ¿Estás seguro de eliminar el producto "${descripcion}" del catálogo maestro? Esto lo quitará de las opciones de autocompletado.`)) {
+      const cleanDesc = descripcion.trim().toUpperCase();
+      const cleanUnit = unidad.trim().toUpperCase();
+      const docId = `${cleanDesc}___${cleanUnit}`.replace(/[^a-zA-Z0-9]/g, '_');
+      try {
+        await deleteDoc(doc(db, 'modules', currentUser.module, 'catalogo', docId));
+        showToast(`Producto ${descripcion} eliminado del catálogo`, 'success');
+      } catch (err) {
+        showToast('Hubo un error al intentar eliminar el producto', 'error');
+      }
+    }
+  };
+
   const handleAddArea = async (area: string) => {
     if (!currentUser) return;
     const cleanArea = area.trim().toUpperCase();
@@ -361,7 +377,7 @@ export default function App() {
           <MovementCapture user={currentUser} onSave={handleSaveMovement} inventory={currentInventory} areas={areasMaestras} proveedores={proveedoresMaestros} type="entrada" showToast={showToast} />
         )}
         {activeTab === 'inventario' && (isAdmin || isSup || isRespAlmacen) && (
-          <InventoryTab user={currentUser} inventory={currentInventory} onOpenAdjustment={openAdjustmentModal} showToast={showToast} />
+          <InventoryTab user={currentUser} inventory={currentInventory} onOpenAdjustment={openAdjustmentModal} onDeleteProduct={handleDeleteProduct} showToast={showToast} />
         )}
         {activeTab === 'basedatos' && (
           <DatabaseTab user={currentUser} movimientos={movimientos} onDeleteMovimiento={handleDeleteMovimiento} onClearHistory={handleClearHistory} onSync={syncData} showToast={showToast} />

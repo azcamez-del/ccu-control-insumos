@@ -138,7 +138,18 @@ export default function AccountingCapture({ user, onSave, areas, proveedores, sh
         <div className="p-5 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
           <div className="form-group pb-0">
             <label className="block text-xs font-bold text-gray-700 mb-1">Proveedor / Emisor</label>
-            <input type="text" value={prov} onChange={e => setProv(e.target.value)} placeholder="Ej. REPRESENTACIONES DE AUDIO" className="w-full border border-[#ddd9d0] rounded-lg px-3 py-2 text-xs uppercase" />
+            <input 
+              type="text" 
+              list="prov-list"
+              value={prov} 
+              onChange={e => setProv(e.target.value)} 
+              placeholder="Ej. REPRESENTACIONES DE AUDIO" 
+              className="w-full border border-[#ddd9d0] rounded-lg px-3 py-2 text-xs uppercase" 
+            />
+            {/* AQUÍ ESTÁ EL NUEVO AUTOCOMPLETADO */}
+            <datalist id="prov-list">
+              {proveedores.map(p => <option key={p} value={p} />)}
+            </datalist>
           </div>
           <div className="form-group pb-0">
             <label className="block text-xs font-bold text-gray-700 mb-1">Folio Factura (UUID / Serie)</label>

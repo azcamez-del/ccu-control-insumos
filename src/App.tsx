@@ -386,11 +386,11 @@ export default function App() {
             <History size={15} /> Historial Financiero
           </button>
           <button onClick={() => setActiveTab('areas')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'areas' ? 'border-amber-600 text-amber-700 font-bold' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
-            <MapPin size={15} /> Proveedores / Centros de Costo
+            <MapPin size={15} /> Proveedores y Áreas CCU
           </button>
           {(isAdmin || isSup) && (
             <button onClick={() => setActiveTab('reportes')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'reportes' ? 'border-amber-600 text-amber-700 font-bold' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
-              <Calculator size={15} /> Reportes Presupuestales
+              <Calculator size={15} /> Reportes y Analíticas
             </button>
           )}
         </nav>

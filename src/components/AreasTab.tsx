@@ -28,7 +28,9 @@ export default function AreasTab({
   const [searchArea, setSearchArea] = useState('');
   const [searchProv, setSearchProv] = useState('');
 
-  const isCompras = user.module === 'COMPRAS';
+  // AQUÍ ESTÁ LA MAGIA: Ahora mostramos proveedores si es COMPRAS o CONTABILIDAD
+  const showProveedores = user.module === 'COMPRAS' || user.module === 'CONTABILIDAD';
+  const isConta = user.module === 'CONTABILIDAD';
 
   // Area Catalogs Logic
   const handleAddAreaSubmit = (e: React.FormEvent) => {
@@ -73,18 +75,18 @@ export default function AreasTab({
     <div className="space-y-6">
       <div className="page-header pb-4 border-b border-[#ddd9d0]">
         <h2 className="text-xl md:text-2xl font-bold font-sans text-gray-900">
-          {isCompras ? 'Gestión de Catálogos (Áreas y Proveedores)' : 'Gestión de Catálogo de Áreas'}
+          {isConta ? 'Proveedores y Áreas CCU' : showProveedores ? 'Gestión de Catálogos (Áreas y Proveedores)' : 'Gestión de Catálogo de Áreas'}
         </h2>
         <p className="text-xs md:text-sm text-gray-500 mt-1">
           Administre los catálogos base para autocompletar rápidamente los formularios de registro
         </p>
       </div>
 
-      <div className={`grid grid-cols-1 gap-6 ${isCompras ? 'md:grid-cols-2' : ''}`}>
+      <div className={`grid grid-cols-1 gap-6 ${showProveedores ? 'md:grid-cols-2' : ''}`}>
         {/* Areas List Box Card */}
         <div className="bg-white border border-[#ddd9d0] rounded-xl p-5 md:p-6 shadow-sm space-y-4">
           <h3 className="text-sm md:text-base font-bold text-gray-800 tracking-wide uppercase border-b border-gray-100 pb-2">
-            Catálogo Oficial de Áreas (CCU)
+            Catálogo Oficial de Áreas / Centros de Costo
           </h3>
 
           <form onSubmit={handleAddAreaSubmit} className="flex gap-2">
@@ -152,8 +154,8 @@ export default function AreasTab({
           </div>
         </div>
 
-        {/* Suppliers List Card: ONLY displayed under COMPRAS */}
-        {isCompras && (
+        {/* Suppliers List Card: Muestra si es Compras o Contabilidad */}
+        {showProveedores && (
           <div className="bg-white border border-[#ddd9d0] rounded-xl p-5 md:p-6 shadow-sm space-y-4">
             <h3 className="text-sm md:text-base font-bold text-gray-800 tracking-wide uppercase border-b border-gray-100 pb-2">
               Catálogo Oficial de Proveedores
@@ -164,7 +166,7 @@ export default function AreasTab({
                 type="text"
                 value={newProv}
                 onChange={(e) => setNewProv(e.target.value)}
-                placeholder="Ej. OFFICE DEPOT"
+                placeholder="Ej. REPRESENTACIONES DE AUDIO"
                 className="flex-1 border-1.5 border-[#ddd9d0] rounded-lg px-3 py-2 text-xs md:text-sm focus:border-blue-600 focus:outline-none uppercase"
               />
               <button

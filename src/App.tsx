@@ -11,7 +11,7 @@ import DatabaseTab from './components/DatabaseTab';
 import AreasTab from './components/AreasTab';
 import ReportTab from './components/ReportTab';
 
-import { LogOut, Package, Database, ShieldAlert, History, MapPin, BarChart3, Scale } from 'lucide-react';
+import { LogOut, Package, Database, ShieldAlert, History, MapPin, BarChart3, Scale, FileText, BookOpen, Calculator } from 'lucide-react';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -104,8 +104,8 @@ export default function App() {
   const handleLoginSuccess = (userObj: User) => {
     setCurrentUser(userObj);
     if (userObj.role === 'responsable_salidas') setActiveTab('captura');
-    else if (userObj.role === 'responsable_entradas') setActiveTab('entradas');
-    else if (userObj.role === 'resp_almacen') setActiveTab('entradas');
+    else if (userObj.role === 'responsable_entradas' || userObj.role === 'resp_almacen') setActiveTab('entradas');
+    else if (userObj.module === 'CONTABILIDAD') setActiveTab('captura');
     else setActiveTab('basedatos');
     showToast(`Bienvenido al sistema, ${userObj.name}`, 'success');
   };
@@ -120,6 +120,7 @@ export default function App() {
     showToast('Datos sincronizados en tiempo real con la nube', 'success');
   };
 
+  // --- LÓGICA DE GUARDADO ORIGINAL INTACTA ---
   const handleSaveMovement = async (
     items: {
       cantidad: number; descripcion: string; unidad: string; area: string; notas: string;
@@ -190,38 +191,28 @@ export default function App() {
 
   const handleClearHistory = async () => {
     if (!currentUser) return;
-    
     const eliminados = movimientos.filter(m => m.eliminado);
-    
     if (eliminados.length === 0) {
       showToast('La bóveda ya está vacía', 'info');
       return;
     }
-
     const moduleId = currentUser.module;
     for (const m of eliminados) {
       if (m.docId) {
-        try {
-          await deleteDoc(doc(db, 'modules', moduleId, 'movimientos', m.docId));
-        } catch (err) {}
+        try { await deleteDoc(doc(db, 'modules', moduleId, 'movimientos', m.docId)); } catch (err) {}
       }
     }
     showToast('La Bóveda de Eliminados se vació permanentemente', 'success');
   };
 
-  // NUEVO: COMANDO PARA BORRAR PRODUCTOS DEL CATÁLOGO
   const handleDeleteProduct = async (descripcion: string, unidad: string) => {
     if (!currentUser) return;
-    if (confirm(`⚠️ ¿Estás seguro de eliminar el producto "${descripcion}" del catálogo maestro? Esto lo quitará de las opciones de autocompletado.`)) {
-      const cleanDesc = descripcion.trim().toUpperCase();
-      const cleanUnit = unidad.trim().toUpperCase();
-      const docId = `${cleanDesc}___${cleanUnit}`.replace(/[^a-zA-Z0-9]/g, '_');
+    if (confirm(`⚠️ ¿Estás seguro de eliminar el producto "${descripcion}" del catálogo maestro?`)) {
+      const docId = `${descripcion.trim().toUpperCase()}___${unidad.trim().toUpperCase()}`.replace(/[^a-zA-Z0-9]/g, '_');
       try {
         await deleteDoc(doc(db, 'modules', currentUser.module, 'catalogo', docId));
-        showToast(`Producto ${descripcion} eliminado del catálogo`, 'success');
-      } catch (err) {
-        showToast('Hubo un error al intentar eliminar el producto', 'error');
-      }
+        showToast(`Producto eliminado del catálogo`, 'success');
+      } catch (err) { showToast('Hubo un error al intentar eliminar el producto', 'error'); }
     }
   };
 
@@ -234,33 +225,21 @@ export default function App() {
       showToast(`Área ${cleanArea} agregada con éxito`, 'success');
     } catch (err) { }
   };
-
   const handleRemoveArea = async (area: string) => {
     if (!currentUser) return;
     const slug = area.trim().toUpperCase().replace(/[^a-zA-Z0-9]/g, '_');
-    try {
-      await deleteDoc(doc(db, 'modules', currentUser.module, 'areas', slug));
-      showToast(`Área eliminada`, 'warn');
-    } catch (err) { }
+    try { await deleteDoc(doc(db, 'modules', currentUser.module, 'areas', slug)); showToast(`Área eliminada`, 'warn'); } catch (err) { }
   };
-
   const handleAddProv = async (prov: string) => {
     if (!currentUser) return;
     const cleanProv = prov.trim().toUpperCase();
     const slug = cleanProv.replace(/[^a-zA-Z0-9]/g, '_');
-    try {
-      await setDoc(doc(db, 'modules', currentUser.module, 'proveedores', slug), { name: cleanProv });
-      showToast(`Proveedor ${cleanProv} agregado con éxito`, 'success');
-    } catch (err) { }
+    try { await setDoc(doc(db, 'modules', currentUser.module, 'proveedores', slug), { name: cleanProv }); showToast(`Proveedor ${cleanProv} agregado con éxito`, 'success'); } catch (err) { }
   };
-
   const handleRemoveProv = async (prov: string) => {
     if (!currentUser) return;
     const slug = prov.trim().toUpperCase().replace(/[^a-zA-Z0-9]/g, '_');
-    try {
-      await deleteDoc(doc(db, 'modules', currentUser.module, 'proveedores', slug));
-      showToast(`Proveedor eliminado`, 'warn');
-    } catch (err) { }
+    try { await deleteDoc(doc(db, 'modules', currentUser.module, 'proveedores', slug)); showToast(`Proveedor eliminado`, 'warn'); } catch (err) { }
   };
 
   const openAdjustmentModal = (item: { descripcion: string; unidad: string }) => {
@@ -305,25 +284,29 @@ export default function App() {
   if (!currentUser) return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
 
   const isCompras = currentUser.module === 'COMPRAS';
+  const isContabilidad = currentUser.module === 'CONTABILIDAD';
+  
   const isRespSalidas = currentUser.role === 'responsable_salidas';
   const isRespEntradas = currentUser.role === 'responsable_entradas';
   const isRespAlmacen = currentUser.role === 'resp_almacen';
-  const isAdmin = currentUser.role === 'admin';
-  const isSup = currentUser.role === 'supervisor';
+  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'admin_contable';
+  const isSup = currentUser.role === 'supervisor' || currentUser.role === 'sup_contable';
 
   let roleLabel = currentUser.role.toUpperCase().replace('_', ' ');
   if (roleLabel === 'RESPONSABLE SALIDAS') roleLabel = 'ENTREGAS';
   if (roleLabel === 'RESPONSABLE ENTRADAS') roleLabel = 'RECEPCIÓN';
   if (roleLabel === 'RESP ALMACEN') roleLabel = 'JEFE ALMACÉN';
+  if (roleLabel === 'ADMIN CONTABLE') roleLabel = 'DIRECTOR FINANZAS';
+  if (roleLabel === 'SUP CONTABLE') roleLabel = 'SUPERVISOR FINANZAS';
 
-  const userDotColor = isAdmin ? 'bg-purple-400' : isSup ? 'bg-sky-400' : isRespAlmacen ? 'bg-indigo-400' : 'bg-emerald-400';
+  const userDotColor = isAdmin ? 'bg-purple-400' : isSup ? 'bg-sky-400' : isRespAlmacen ? 'bg-indigo-400' : isContabilidad ? 'bg-amber-400' : 'bg-emerald-400';
 
   return (
     <div id="app" className="min-h-screen flex flex-col bg-[#f5f3ee] text-[#1a1814] font-sans">
       <header className="bg-[#1a1814] text-white px-6 py-3 flex items-center justify-between sticky top-0 z-50 shadow-md">
         <div className="header-left flex items-center gap-4">
           <span className="header-logo font-mono text-xs md:text-sm tracking-[2px] font-bold uppercase">
-            CCU · <span className="text-sky-400">{currentUser.module}</span>
+            CCU · <span className={isContabilidad ? 'text-amber-400' : 'text-sky-400'}>{currentUser.module}</span>
           </span>
         </div>
         <div className="flex items-center gap-3">
@@ -338,60 +321,97 @@ export default function App() {
         </div>
       </header>
 
-      <nav id="main-nav" className="bg-white border-b border-[#ddd9d0] px-6 py-0 flex gap-1.5 overflow-x-auto scrollbar-none print:hidden">
-        {(isAdmin || isSup || isRespSalidas || isRespAlmacen) && (
-          <button onClick={() => setActiveTab('captura')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'captura' ? 'border-blue-650 text-blue-601 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
-            {isCompras ? <Package size={15} /> : <Database size={15} />} {isCompras ? 'Entregas (Salidas)' : 'Salidas (Despacho)'}
+      {/* NAV PARA INSUMOS Y COMPRAS */}
+      {!isContabilidad && (
+        <nav id="main-nav" className="bg-white border-b border-[#ddd9d0] px-6 py-0 flex gap-1.5 overflow-x-auto scrollbar-none print:hidden">
+          {(isAdmin || isSup || isRespSalidas || isRespAlmacen) && (
+            <button onClick={() => setActiveTab('captura')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'captura' ? 'border-blue-650 text-blue-601 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
+              {isCompras ? <Package size={15} /> : <Database size={15} />} {isCompras ? 'Entregas (Salidas)' : 'Salidas (Despacho)'}
+            </button>
+          )}
+          {(isAdmin || isSup || isRespEntradas || isRespAlmacen) && (
+            <button onClick={() => setActiveTab('entradas')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'entradas' ? 'border-blue-650 text-blue-601 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
+              <ShieldAlert size={15} /> Ingreso de Entradas
+            </button>
+          )}
+          {(isAdmin || isSup || isRespAlmacen) && (
+            <button onClick={() => setActiveTab('inventario')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'inventario' ? 'border-blue-650 text-blue-601 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
+              <Package size={15} /> Inventario Actual
+            </button>
+          )}
+          <button onClick={() => setActiveTab('basedatos')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'basedatos' ? 'border-blue-650 text-blue-610 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
+            <History size={15} /> Historial
           </button>
-        )}
-        {(isAdmin || isSup || isRespEntradas || isRespAlmacen) && (
-          <button onClick={() => setActiveTab('entradas')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'entradas' ? 'border-blue-650 text-blue-601 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
-            <ShieldAlert size={15} /> Ingreso de Entradas
-          </button>
-        )}
-        {(isAdmin || isSup || isRespAlmacen) && (
-          <button onClick={() => setActiveTab('inventario')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'inventario' ? 'border-blue-650 text-blue-601 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
-            <Package size={15} /> Inventario Actual
-          </button>
-        )}
-        <button onClick={() => setActiveTab('basedatos')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'basedatos' ? 'border-blue-650 text-blue-610 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
-          <History size={15} /> Historial
-        </button>
-        {(isAdmin || isSup || isRespEntradas || isRespSalidas || isRespAlmacen) && (
           <button onClick={() => setActiveTab('areas')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'areas' ? 'border-blue-650 text-blue-601 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
             <MapPin size={15} /> {isCompras ? 'Áreas / Proveedores' : 'Áreas'}
           </button>
-        )}
-        {(isAdmin || isSup) && (
-          <button onClick={() => setActiveTab('reportes')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'reportes' ? 'border-blue-650 text-blue-601 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
-            <BarChart3 size={15} /> Reportes y Analíticas
+          {(isAdmin || isSup) && (
+            <button onClick={() => setActiveTab('reportes')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'reportes' ? 'border-blue-650 text-blue-601 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
+              <BarChart3 size={15} /> Reportes y Analíticas
+            </button>
+          )}
+        </nav>
+      )}
+
+      {/* NAV EXCLUSIVO PARA CONTABILIDAD (NUEVO) */}
+      {isContabilidad && (
+        <nav id="main-nav" className="bg-white border-b border-[#ddd9d0] px-6 py-0 flex gap-1.5 overflow-x-auto scrollbar-none print:hidden">
+          <button onClick={() => setActiveTab('captura')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'captura' ? 'border-amber-600 text-amber-700 font-bold' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
+            <FileText size={15} /> Ingresar Factura Gasto
           </button>
-        )}
-      </nav>
+          <button onClick={() => setActiveTab('inventario')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'inventario' ? 'border-amber-600 text-amber-700 font-bold' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
+            <BookOpen size={15} /> Libro Contable / Activos
+          </button>
+          <button onClick={() => setActiveTab('basedatos')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'basedatos' ? 'border-amber-600 text-amber-700 font-bold' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
+            <History size={15} /> Historial Financiero
+          </button>
+          <button onClick={() => setActiveTab('areas')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'areas' ? 'border-amber-600 text-amber-700 font-bold' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
+            <MapPin size={15} /> Proveedores / Centros de Costo
+          </button>
+          {(isAdmin || isSup) && (
+            <button onClick={() => setActiveTab('reportes')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'reportes' ? 'border-amber-600 text-amber-700 font-bold' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
+              <Calculator size={15} /> Reportes Presupuestales
+            </button>
+          )}
+        </nav>
+      )}
 
       <main className="flex-1 py-8 px-6 max-w-7xl mx-auto w-full">
-        {activeTab === 'captura' && (isAdmin || isSup || isRespSalidas || isRespAlmacen) && (
-          <MovementCapture user={currentUser} onSave={handleSaveMovement} inventory={currentInventory} areas={areasMaestras} proveedores={proveedoresMaestros} type="salida" showToast={showToast} />
+        {/* RENDER ORIGINAL (INTACTO) PARA INSUMOS/COMPRAS */}
+        {!isContabilidad && (
+          <>
+            {activeTab === 'captura' && (isAdmin || isSup || isRespSalidas || isRespAlmacen) && (
+              <MovementCapture user={currentUser} onSave={handleSaveMovement} inventory={currentInventory} areas={areasMaestras} proveedores={proveedoresMaestros} type="salida" showToast={showToast} />
+            )}
+            {activeTab === 'entradas' && (isAdmin || isSup || isRespEntradas || isRespAlmacen) && (
+              <MovementCapture user={currentUser} onSave={handleSaveMovement} inventory={currentInventory} areas={areasMaestras} proveedores={proveedoresMaestros} type="entrada" showToast={showToast} />
+            )}
+            {activeTab === 'inventario' && (isAdmin || isSup || isRespAlmacen) && (
+              <InventoryTab user={currentUser} inventory={currentInventory} onOpenAdjustment={openAdjustmentModal} onDeleteProduct={handleDeleteProduct} showToast={showToast} />
+            )}
+            {activeTab === 'basedatos' && (
+              <DatabaseTab user={currentUser} movimientos={movimientos} onDeleteMovimiento={handleDeleteMovimiento} onClearHistory={handleClearHistory} onSync={syncData} showToast={showToast} />
+            )}
+            {activeTab === 'areas' && (
+              <AreasTab user={currentUser} areas={areasMaestras} proveedores={proveedoresMaestros} onAddArea={handleAddArea} onRemoveArea={handleRemoveArea} onAddProv={handleAddProv} onRemoveProv={handleRemoveProv} showToast={showToast} />
+            )}
+            {activeTab === 'reportes' && (isAdmin || isSup) && (
+              <ReportTab user={currentUser} movimientos={movimientos} showToast={showToast} />
+            )}
+          </>
         )}
-        {activeTab === 'entradas' && (isAdmin || isSup || isRespEntradas || isRespAlmacen) && (
-          <MovementCapture user={currentUser} onSave={handleSaveMovement} inventory={currentInventory} areas={areasMaestras} proveedores={proveedoresMaestros} type="entrada" showToast={showToast} />
-        )}
-        {activeTab === 'inventario' && (isAdmin || isSup || isRespAlmacen) && (
-          <InventoryTab user={currentUser} inventory={currentInventory} onOpenAdjustment={openAdjustmentModal} onDeleteProduct={handleDeleteProduct} showToast={showToast} />
-        )}
-        {activeTab === 'basedatos' && (
-          <DatabaseTab user={currentUser} movimientos={movimientos} onDeleteMovimiento={handleDeleteMovimiento} onClearHistory={handleClearHistory} onSync={syncData} showToast={showToast} />
-        )}
-        {activeTab === 'areas' && (isAdmin || isSup || isRespEntradas || isRespSalidas || isRespAlmacen) && (
-          <AreasTab user={currentUser} areas={areasMaestras} proveedores={proveedoresMaestros} onAddArea={handleAddArea} onRemoveArea={handleRemoveArea} onAddProv={handleAddProv} onRemoveProv={handleRemoveProv} showToast={showToast} />
-        )}
-        {activeTab === 'reportes' && (isAdmin || isSup) && (
-          <ReportTab user={currentUser} movimientos={movimientos} showToast={showToast} />
+
+        {/* RENDER EXCLUSIVO PARA CONTABILIDAD (PLACEMENTS EN CONSTRUCCIÓN) */}
+        {isContabilidad && (
+          <div className="bg-white rounded-xl shadow-sm border border-[#ddd9d0] p-16 text-center">
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Módulo Financiero en Desarrollo 🚧</h2>
+            <p className="text-gray-500">Estamos preparando el entorno contable para la carga de facturas de Gastos y Bienes Inventariables.</p>
+          </div>
         )}
       </main>
 
-      {/* Manual Audit Adjustment Modal */}
-      {adjustmentModal.isOpen && (
+      {/* Manual Audit Adjustment Modal (Solo Insumos/Compras) */}
+      {!isContabilidad && adjustmentModal.isOpen && (
         <div className="fixed inset-0 bg-[#1a1814]/60 backdrop-blur-xs flex items-center justify-center p-4 z-100 transition-opacity">
           <div className="bg-white rounded-xl max-w-[500px] w-full p-6 shadow-2xl border border-[#ddd9d0] space-y-4">
             <h3 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><Scale size={18} className="text-blue-600" /> Ajuste Manual de Auditoría</h3>

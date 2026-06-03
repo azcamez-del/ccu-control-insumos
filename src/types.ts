@@ -31,7 +31,8 @@ export interface CatalogoItem {
 export interface User {
   username: string;
   pass: string;
-  role: 'admin' | 'supervisor' | 'responsable_salidas' | 'responsable_entradas';
+  // AQUÍ AGREGAMOS EL NUEVO ROL DE SISTEMA:
+  role: 'admin' | 'supervisor' | 'responsable_salidas' | 'responsable_entradas' | 'resp_almacen';
   module: 'INSUMOS' | 'COMPRAS';
   name: string;
 }
@@ -46,7 +47,10 @@ export const USERS: Record<string, Omit<User, 'username'>> = {
   admin_compras:  { pass: 'compra2024',   role: 'admin',                module: 'COMPRAS', name: 'Admin. Compras' },
   sup_compras:    { pass: 'supcompra24',  role: 'supervisor',           module: 'COMPRAS', name: 'Sup. Compras' },
   resp_compras:   { pass: 'respcompra24', role: 'responsable_entradas', module: 'COMPRAS', name: 'Resp. Compras' },
-  resp_entregas:  { pass: 'entrega2024',  role: 'responsable_salidas',  module: 'COMPRAS', name: 'Resp. Entregas' }
+  resp_entregas:  { pass: 'entrega2024',  role: 'responsable_salidas',  module: 'COMPRAS', name: 'Resp. Entregas' },
+  
+  // NUEVA CUENTA: JEFE DE ALMACÉN (Híbrido)
+  resp_almacen:   { pass: 'almacen2026',  role: 'resp_almacen',         module: 'COMPRAS', name: 'Jefe Almacén' }
 };
 
 export const UNIDADES = [

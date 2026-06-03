@@ -105,6 +105,7 @@ export default function App() {
     setCurrentUser(userObj);
     if (userObj.role === 'responsable_salidas') setActiveTab('captura');
     else if (userObj.role === 'responsable_entradas') setActiveTab('entradas');
+    else if (userObj.role === 'resp_almacen') setActiveTab('entradas');
     else setActiveTab('basedatos');
     showToast(`Bienvenido al sistema, ${userObj.name}`, 'success');
   };
@@ -187,11 +188,9 @@ export default function App() {
     }
   };
 
-  // AQUÍ ESTÁ LA MAGIA: Ahora solo borra los registros de la Bóveda (eliminado: true)
   const handleClearHistory = async () => {
     if (!currentUser) return;
     
-    // Filtramos para obtener SOLO los registros que ya fueron anulados
     const eliminados = movimientos.filter(m => m.eliminado);
     
     if (eliminados.length === 0) {
@@ -200,7 +199,6 @@ export default function App() {
     }
 
     const moduleId = currentUser.module;
-    // Borramos UNICAMENTE los registros filtrados de la base de datos
     for (const m of eliminados) {
       if (m.docId) {
         try {
@@ -293,14 +291,16 @@ export default function App() {
   const isCompras = currentUser.module === 'COMPRAS';
   const isRespSalidas = currentUser.role === 'responsable_salidas';
   const isRespEntradas = currentUser.role === 'responsable_entradas';
+  const isRespAlmacen = currentUser.role === 'resp_almacen';
   const isAdmin = currentUser.role === 'admin';
   const isSup = currentUser.role === 'supervisor';
 
   let roleLabel = currentUser.role.toUpperCase().replace('_', ' ');
   if (roleLabel === 'RESPONSABLE SALIDAS') roleLabel = 'ENTREGAS';
   if (roleLabel === 'RESPONSABLE ENTRADAS') roleLabel = 'RECEPCIÓN';
+  if (roleLabel === 'RESP ALMACEN') roleLabel = 'JEFE ALMACÉN';
 
-  const userDotColor = isAdmin ? 'bg-purple-400' : isSup ? 'bg-sky-400' : 'bg-emerald-400';
+  const userDotColor = isAdmin ? 'bg-purple-400' : isSup ? 'bg-sky-400' : isRespAlmacen ? 'bg-indigo-400' : 'bg-emerald-400';
 
   return (
     <div id="app" className="min-h-screen flex flex-col bg-[#f5f3ee] text-[#1a1814] font-sans">
@@ -323,17 +323,17 @@ export default function App() {
       </header>
 
       <nav id="main-nav" className="bg-white border-b border-[#ddd9d0] px-6 py-0 flex gap-1.5 overflow-x-auto scrollbar-none print:hidden">
-        {(isAdmin || isSup || isRespSalidas) && (
+        {(isAdmin || isSup || isRespSalidas || isRespAlmacen) && (
           <button onClick={() => setActiveTab('captura')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'captura' ? 'border-blue-650 text-blue-601 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
             {isCompras ? <Package size={15} /> : <Database size={15} />} {isCompras ? 'Entregas (Salidas)' : 'Salidas (Despacho)'}
           </button>
         )}
-        {(isAdmin || isSup || isRespEntradas) && (
+        {(isAdmin || isSup || isRespEntradas || isRespAlmacen) && (
           <button onClick={() => setActiveTab('entradas')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'entradas' ? 'border-blue-650 text-blue-601 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
             <ShieldAlert size={15} /> Ingreso de Entradas
           </button>
         )}
-        {(isAdmin || isSup) && (
+        {(isAdmin || isSup || isRespAlmacen) && (
           <button onClick={() => setActiveTab('inventario')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'inventario' ? 'border-blue-650 text-blue-601 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
             <Package size={15} /> Inventario Actual
           </button>
@@ -341,7 +341,7 @@ export default function App() {
         <button onClick={() => setActiveTab('basedatos')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'basedatos' ? 'border-blue-650 text-blue-610 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
           <History size={15} /> Historial
         </button>
-        {(isAdmin || isSup || isRespEntradas || isRespSalidas) && (
+        {(isAdmin || isSup || isRespEntradas || isRespSalidas || isRespAlmacen) && (
           <button onClick={() => setActiveTab('areas')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'areas' ? 'border-blue-650 text-blue-601 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
             <MapPin size={15} /> {isCompras ? 'Áreas / Proveedores' : 'Áreas'}
           </button>
@@ -354,19 +354,19 @@ export default function App() {
       </nav>
 
       <main className="flex-1 py-8 px-6 max-w-7xl mx-auto w-full">
-        {activeTab === 'captura' && (isAdmin || isSup || isRespSalidas) && (
+        {activeTab === 'captura' && (isAdmin || isSup || isRespSalidas || isRespAlmacen) && (
           <MovementCapture user={currentUser} onSave={handleSaveMovement} inventory={currentInventory} areas={areasMaestras} proveedores={proveedoresMaestros} type="salida" showToast={showToast} />
         )}
-        {activeTab === 'entradas' && (isAdmin || isSup || isRespEntradas) && (
+        {activeTab === 'entradas' && (isAdmin || isSup || isRespEntradas || isRespAlmacen) && (
           <MovementCapture user={currentUser} onSave={handleSaveMovement} inventory={currentInventory} areas={areasMaestras} proveedores={proveedoresMaestros} type="entrada" showToast={showToast} />
         )}
-        {activeTab === 'inventario' && (isAdmin || isSup) && (
+        {activeTab === 'inventario' && (isAdmin || isSup || isRespAlmacen) && (
           <InventoryTab user={currentUser} inventory={currentInventory} onOpenAdjustment={openAdjustmentModal} showToast={showToast} />
         )}
         {activeTab === 'basedatos' && (
           <DatabaseTab user={currentUser} movimientos={movimientos} onDeleteMovimiento={handleDeleteMovimiento} onClearHistory={handleClearHistory} onSync={syncData} showToast={showToast} />
         )}
-        {activeTab === 'areas' && (isAdmin || isSup || isRespEntradas || isRespSalidas) && (
+        {activeTab === 'areas' && (isAdmin || isSup || isRespEntradas || isRespSalidas || isRespAlmacen) && (
           <AreasTab user={currentUser} areas={areasMaestras} proveedores={proveedoresMaestros} onAddArea={handleAddArea} onRemoveArea={handleRemoveArea} onAddProv={handleAddProv} onRemoveProv={handleRemoveProv} showToast={showToast} />
         )}
         {activeTab === 'reportes' && (isAdmin || isSup) && (

@@ -6,6 +6,7 @@ import { collection, query, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/
 
 import LoginScreen from './components/LoginScreen';
 import MovementCapture from './components/MovementCapture';
+import AccountingCapture from './components/AccountingCapture';
 import InventoryTab from './components/InventoryTab';
 import DatabaseTab from './components/DatabaseTab';
 import AreasTab from './components/AreasTab';
@@ -46,7 +47,10 @@ export default function App() {
           prov: d.prov || undefined, fact: d.fact || undefined, fechaFact: d.fechaFact || undefined,
           costoUnit: d.costoUnit !== undefined ? Number(d.costoUnit) : undefined,
           costoTotal: d.costoTotal !== undefined ? Number(d.costoTotal) : undefined,
-          aut: d.aut || undefined, tipoCompra: d.tipoCompra || undefined, recibe: d.recibe || undefined, resp: d.resp || undefined
+          aut: d.aut || undefined, tipoCompra: d.tipoCompra || undefined, recibe: d.recibe || undefined, resp: d.resp || undefined,
+          // Nuevos campos Contables
+          horaFact: d.horaFact, impuestos: d.impuestos, totalFactura: d.totalFactura, metodoPago: d.metodoPago,
+          tipoRecurso: d.tipoRecurso, categoriaGasto: d.categoriaGasto, marca: d.marca, modelo: d.modelo, serie: d.serie
         });
       });
       list.sort((a, b) => b.id - a.id);
@@ -120,12 +124,15 @@ export default function App() {
     showToast('Datos sincronizados en tiempo real con la nube', 'success');
   };
 
-  // --- LÓGICA DE GUARDADO ORIGINAL INTACTA ---
+  // Función Guardar Universal (Insumos, Compras y Facturas Contables)
   const handleSaveMovement = async (
     items: {
       cantidad: number; descripcion: string; unidad: string; area: string; notas: string;
       fecha?: string; prov?: string; fact?: string; shadowUnit?: string; fechaFact?: string;
       costoUnit?: number; costoTotal?: number; aut?: string; tipoCompra?: string; recibe?: string; resp?: string;
+      // Nuevos campos contables:
+      horaFact?: string; impuestos?: number; totalFactura?: number; metodoPago?: string;
+      tipoRecurso?: string; categoriaGasto?: string; marca?: string; modelo?: string; serie?: string;
     }[],
     catalogsToInsert: CatalogoItem[]
   ) => {
@@ -142,13 +149,15 @@ export default function App() {
     }
 
     const timestamp = Date.now();
+    const baseTipo = currentUser.module === 'CONTABILIDAD' ? 'FACTURA_GASTO' : (activeTab === 'captura' ? 'SALIDA' : 'ENTRADA');
+
     for (let index = 0; index < items.length; index++) {
       const i = items[index];
       const movIdStr = `${timestamp}_${index}_${Math.floor(Math.random() * 1000)}`;
 
       const dataToSave: any = {
         id: timestamp + index + Math.random(),
-        tipo: activeTab === 'captura' ? 'SALIDA' : 'ENTRADA',
+        tipo: baseTipo,
         fecha: i.fecha || new Date().toISOString().split('T')[0],
         cantidad: Math.floor(Number(i.cantidad) || 0),
         descripcion: i.descripcion.trim().toUpperCase(),
@@ -170,11 +179,22 @@ export default function App() {
       if (i.recibe) dataToSave.recibe = i.recibe.trim().toUpperCase();
       if (i.resp) dataToSave.resp = i.resp.trim().toUpperCase();
 
+      // Inyección de campos Contables a la Base de Datos
+      if (i.horaFact) dataToSave.horaFact = i.horaFact;
+      if (i.impuestos !== undefined) dataToSave.impuestos = Number(i.impuestos);
+      if (i.totalFactura !== undefined) dataToSave.totalFactura = Number(i.totalFactura);
+      if (i.metodoPago) dataToSave.metodoPago = i.metodoPago.trim().toUpperCase();
+      if (i.tipoRecurso) dataToSave.tipoRecurso = i.tipoRecurso.trim().toUpperCase();
+      if (i.categoriaGasto) dataToSave.categoriaGasto = i.categoriaGasto.trim().toUpperCase();
+      if (i.marca) dataToSave.marca = i.marca.trim().toUpperCase();
+      if (i.modelo) dataToSave.modelo = i.modelo.trim().toUpperCase();
+      if (i.serie) dataToSave.serie = i.serie.trim().toUpperCase();
+
       try {
         await setDoc(doc(db, 'modules', moduleId, 'movimientos', movIdStr), dataToSave);
       } catch (err) { handleFirestoreError(err, OperationType.WRITE, `modules/${moduleId}/movimientos/${movIdStr}`); }
     }
-    showToast('Movimientos registrados y guardados en la nube', 'success');
+    showToast('Documentos registrados y guardados en la nube fiscal', 'success');
   };
 
   const handleDeleteMovimiento = async (id: number) => {
@@ -353,7 +373,7 @@ export default function App() {
         </nav>
       )}
 
-      {/* NAV EXCLUSIVO PARA CONTABILIDAD (NUEVO) */}
+      {/* NAV EXCLUSIVO PARA CONTABILIDAD */}
       {isContabilidad && (
         <nav id="main-nav" className="bg-white border-b border-[#ddd9d0] px-6 py-0 flex gap-1.5 overflow-x-auto scrollbar-none print:hidden">
           <button onClick={() => setActiveTab('captura')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'captura' ? 'border-amber-600 text-amber-700 font-bold' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
@@ -401,12 +421,22 @@ export default function App() {
           </>
         )}
 
-        {/* RENDER EXCLUSIVO PARA CONTABILIDAD (PLACEMENTS EN CONSTRUCCIÓN) */}
+        {/* RENDER EXCLUSIVO PARA CONTABILIDAD */}
         {isContabilidad && (
-          <div className="bg-white rounded-xl shadow-sm border border-[#ddd9d0] p-16 text-center">
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Módulo Financiero en Desarrollo 🚧</h2>
-            <p className="text-gray-500">Estamos preparando el entorno contable para la carga de facturas de Gastos y Bienes Inventariables.</p>
-          </div>
+          <>
+            {activeTab === 'captura' && (
+              <AccountingCapture user={currentUser} onSave={handleSaveMovement} areas={areasMaestras} proveedores={proveedoresMaestros} showToast={showToast} />
+            )}
+            {activeTab !== 'captura' && activeTab !== 'areas' && (
+              <div className="bg-white rounded-xl shadow-sm border border-[#ddd9d0] p-16 text-center">
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">Módulo Financiero en Desarrollo 🚧</h2>
+                <p className="text-gray-500">Estamos preparando las tablas de reportes e inventarios para Contabilidad. ¡Pronto estarán listas!</p>
+              </div>
+            )}
+            {activeTab === 'areas' && (
+              <AreasTab user={currentUser} areas={areasMaestras} proveedores={proveedoresMaestros} onAddArea={handleAddArea} onRemoveArea={handleRemoveArea} onAddProv={handleAddProv} onRemoveProv={handleRemoveProv} showToast={showToast} />
+            )}
+          </>
         )}
       </main>
 

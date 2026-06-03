@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { User, Movimiento } from '../types';
 import { formatearFecha } from '../utils';
-import { RefreshCw, Download, Trash, Search, ShieldAlert, FileSpreadsheet } from 'lucide-react';
+import { RefreshCw, Trash, Search, ShieldAlert, FileSpreadsheet } from 'lucide-react';
 
 interface DatabaseTabProps {
   user: User;
@@ -151,6 +151,7 @@ export default function DatabaseTab({
             <RefreshCw size={13} /> Sincronizar
           </button>
           
+          {/* El botón de auditar sigue siendo SOLO para el Admin */}
           {isAdmin && (
             <button
               onClick={() => setShowAuditVault(!showAuditVault)}
@@ -160,17 +161,18 @@ export default function DatabaseTab({
             </button>
           )}
 
-          {isAdmin && (
-            <>
-              <button onClick={handleExportExcel} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5 cursor-pointer">
-                <FileSpreadsheet size={13} /> {showAuditVault ? 'Excel Auditoría' : 'Descargar a Excel'}
-              </button>
-              {showAuditVault && (
-                <button onClick={handleClearHistoryConfirm} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 border border-red-200 text-red-650 hover:bg-red-100 text-red-700 flex items-center gap-1.5 cursor-pointer">
-                  <Trash size={13} /> Vaciar Bóveda
-                </button>
-              )}
-            </>
+          {/* AQUÍ ESTÁ EL CAMBIO: Ahora Admin Y Supervisor pueden descargar el Excel */}
+          {(isAdmin || isSup) && (
+            <button onClick={handleExportExcel} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5 cursor-pointer">
+              <FileSpreadsheet size={13} /> {showAuditVault ? 'Excel Auditoría' : 'Descargar a Excel'}
+            </button>
+          )}
+
+          {/* Vaciar bóveda sigue siendo SOLO para el Admin y solo dentro de la bóveda */}
+          {isAdmin && showAuditVault && (
+            <button onClick={handleClearHistoryConfirm} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 border border-red-200 text-red-650 hover:bg-red-100 text-red-700 flex items-center gap-1.5 cursor-pointer">
+              <Trash size={13} /> Vaciar Bóveda
+            </button>
           )}
         </div>
       </div>

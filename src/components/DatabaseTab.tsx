@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import * as XLSX from 'xlsx';
 import { User, Movimiento } from '../types';
 import { formatearFecha } from '../utils';
-import { RefreshCw, Download, Trash, Search, ShieldAlert } from 'lucide-react';
+import { RefreshCw, Download, Trash, Search, ShieldAlert, FileSpreadsheet } from 'lucide-react';
 
 interface DatabaseTabProps {
   user: User;
@@ -61,7 +62,7 @@ export default function DatabaseTab({
     return b.fecha.localeCompare(a.fecha);
   });
 
-  const handleExportCSV = () => {
+  const handleExportExcel = () => {
     const validMovs = showAuditVault 
       ? movimientos.filter(m => m.eliminado) 
       : movimientos.filter(m => !m.eliminado);
@@ -71,36 +72,54 @@ export default function DatabaseTab({
       return;
     }
     
-    const bom = '\uFEFF';
-    let header = 'TIPO,FECHA,CANTIDAD,DESCRIPCIÓN,UNIDAD,ÁREA/ORIGEN,NOTAS,RESPONSABLE\n';
-    if (user.module === 'COMPRAS') {
-      header = 'TIPO,FECHA,CANTIDAD,DESCRIPCIÓN,UNIDAD,ÁREA/ORIGEN,PROVEEDOR,FACTURA,FECHA FACTURA,COSTO UNITARIO,COSTO TOTAL,N_AUTORIZACION,QUIEN_RECIBE,RESPONSABLE_AREA,NOTAS,RESPONSABLE_SISTEMA\n';
-    }
-
-    const rows = [...validMovs]
+    // Preparar los datos para Excel
+    const dataToExport = [...validMovs]
       .sort((a, b) => { 
         if (a.fecha === b.fecha) return b.id - a.id; 
         return b.fecha.localeCompare(a.fecha); 
       })
       .map(r => {
         if (user.module === 'COMPRAS') {
-          return [
-            r.tipo, formatearFecha(r.fecha), r.cantidad, `"${r.descripcion}"`, `"${r.unidad}"`, `"${r.area}"`,
-            `"${r.prov || ''}"`, `"${r.fact || ''}"`, `"${r.fechaFact ? formatearFecha(r.fechaFact) : ''}"`,
-            r.costoUnit || '', r.costoTotal || '', `"${r.aut || ''}"`, `"${r.recibe || ''}"`, `"${r.resp || ''}"`,
-            `"${r.notas || ''}"`, `"${r.registradoPor}"`
-          ].join(',');
+          return {
+            'TIPO': r.tipo,
+            'FECHA': formatearFecha(r.fecha),
+            'CANTIDAD': r.cantidad,
+            'DESCRIPCIÓN': r.descripcion,
+            'UNIDAD': r.unidad,
+            'ÁREA/DESTINO': r.area,
+            'PROVEEDOR': r.prov || '',
+            'FACTURA / REMISIÓN': r.fact || '',
+            'FECHA FACTURA': r.fechaFact ? formatearFecha(r.fechaFact) : '',
+            'COSTO UNITARIO': r.costoUnit || 0,
+            'COSTO TOTAL': r.costoTotal || 0,
+            'N° AUTORIZACIÓN': r.aut || '',
+            'QUIEN RECIBE': r.recibe || '',
+            'RESPONSABLE ÁREA': r.resp || '',
+            'NOTAS / COMENTARIOS': r.notas || '',
+            'USUARIO SISTEMA': r.registradoPor
+          };
         }
-        return [r.tipo, r.fecha, r.cantidad, `"${r.descripcion}"`, `"${r.unidad}"`, `"${r.area}"`, `"${r.notas || ''}"`, `"${r.registradoPor}"`].join(',');
-      }).join('\n');
+        return {
+            'TIPO': r.tipo,
+            'FECHA': formatearFecha(r.fecha),
+            'CANTIDAD': r.cantidad,
+            'DESCRIPCIÓN': r.descripcion,
+            'UNIDAD': r.unidad,
+            'ÁREA / DESTINO': r.area,
+            'NOTAS / COMENTARIOS': r.notas || '',
+            'USUARIO SISTEMA': r.registradoPor
+        };
+      });
 
-    const prefix = showAuditVault ? 'REPORTE_AUDITORIA_ELIMINADOS_' : 'CCU_Bitacora_General_';
-    const blob = new Blob([bom + header + rows], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `${prefix}${user.module}_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    showToast('Historial descargado correctamente', 'success');
+    // Crear el libro de Excel y descargarlo
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Historial_Movimientos");
+    
+    const prefix = showAuditVault ? 'Auditoria_Eliminados_' : 'Bitacora_General_';
+    XLSX.writeFile(workbook, `${prefix}${user.module}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    
+    showToast('Archivo Excel generado y descargado correctamente', 'success');
   };
 
   const handleClearHistoryConfirm = () => {
@@ -143,10 +162,9 @@ export default function DatabaseTab({
 
           {isAdmin && (
             <>
-              <button onClick={handleExportCSV} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-50 border border-gray-300 text-gray-700 hover:bg-gray-100 flex items-center gap-1.5 cursor-pointer">
-                <Download size={13} /> {showAuditVault ? 'Exportar Auditoría' : 'Exportar Historial'}
+              <button onClick={handleExportExcel} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5 cursor-pointer">
+                <FileSpreadsheet size={13} /> {showAuditVault ? 'Excel Auditoría' : 'Descargar a Excel'}
               </button>
-              {/* MAGIA AQUÍ: El botón rojo ahora se llama Vaciar Bóveda y SOLO aparece si estamos en la bóveda */}
               {showAuditVault && (
                 <button onClick={handleClearHistoryConfirm} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 border border-red-200 text-red-650 hover:bg-red-100 text-red-700 flex items-center gap-1.5 cursor-pointer">
                   <Trash size={13} /> Vaciar Bóveda

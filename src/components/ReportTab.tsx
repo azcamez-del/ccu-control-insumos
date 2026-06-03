@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { User, Movimiento } from '../types';
 import { formatearFecha } from '../utils';
-import { BarChart3, Download, Printer, Percent } from 'lucide-react';
+import { BarChart3, Printer, Percent, DollarSign, FileSpreadsheet } from 'lucide-react';
 
 interface ReportTabProps {
   user: User;
@@ -10,12 +11,13 @@ interface ReportTabProps {
 }
 
 export default function ReportTab({ user, movimientos, showToast }: ReportTabProps) {
-  const [repTipo, setRepTipo] = useState<'SALIDA' | 'ENTRADA' | 'AJUSTE'>('SALIDA');
+  const [repTipo, setRepTipo] = useState<'SALIDA' | 'ENTRADA' | 'AJUSTE' | 'ENTRADA_CONTABLE' | 'SALIDA_CONTABLE'>('SALIDA');
   const [fechaIni, setFechaIni] = useState('');
   const [fechaFin, setFechaFin] = useState('');
 
   const [hasData, setHasData] = useState(false);
   const [totalFilteredQty, setTotalFilteredQty] = useState(0);
+  const [totalFilteredCost, setTotalFilteredCost] = useState(0);
   const [reportAreas, setReportAreas] = useState<[string, number][]>([]);
   const [reportProducts, setReportProducts] = useState<[string, number][]>([]);
   const [filteredTransactions, setFilteredTransactions] = useState<Movimiento[]>([]);
@@ -23,39 +25,42 @@ export default function ReportTab({ user, movimientos, showToast }: ReportTabPro
   // Calculate and generate report analytics
   const runReport = () => {
     let movsReporte: Movimiento[] = [];
+    const isEntrada = repTipo === 'ENTRADA' || repTipo === 'ENTRADA_CONTABLE';
+    const isSalida = repTipo === 'SALIDA' || repTipo === 'SALIDA_CONTABLE';
+    const isContable = repTipo.includes('CONTABLE');
 
-    if (repTipo === 'SALIDA') {
-      movsReporte = movimientos.filter(m => 
-        !m.eliminado && 
-        m.tipo === 'SALIDA' && 
-        m.area !== 'AJUSTE MANUAL' && 
-        (!fechaIni || m.fecha >= fechaIni) && 
-        (!fechaFin || m.fecha <= fechaFin)
-      );
-    } else if (repTipo === 'ENTRADA') {
-      movsReporte = movimientos.filter(m => 
-        !m.eliminado && 
-        m.tipo === 'ENTRADA' && 
-        m.area !== 'AJUSTE MANUAL' && 
-        (!fechaIni || m.fecha >= fechaIni) && 
-        (!fechaFin || m.fecha <= fechaFin)
-      );
-    } else if (repTipo === 'AJUSTE') {
-      movsReporte = movimientos.filter(m => 
-        !m.eliminado && 
-        m.area === 'AJUSTE MANUAL' && 
-        (!fechaIni || m.fecha >= fechaIni) && 
-        (!fechaFin || m.fecha <= fechaFin)
-      );
-    }
+    // 1. Filtrar movimientos
+    movsReporte = movimientos.filter(m => {
+      if (m.eliminado) return false;
+      if (m.area === 'AJUSTE MANUAL' && repTipo !== 'AJUSTE') return false;
+      if (repTipo === 'AJUSTE' && m.area !== 'AJUSTE MANUAL') return false;
+      if (isSalida && m.tipo !== 'SALIDA') return false;
+      if (isEntrada && m.tipo !== 'ENTRADA') return false;
+      if (fechaIni && m.fecha < fechaIni) return false;
+      if (fechaFin && m.fecha > fechaFin) return false;
+      return true;
+    });
 
     if (movsReporte.length === 0) {
       setHasData(false);
       setTotalFilteredQty(0);
+      setTotalFilteredCost(0);
       setReportAreas([]);
       setReportProducts([]);
       setFilteredTransactions([]);
       return;
+    }
+
+    // 2. Mapear el último costo conocido para calcular Salidas Contables (Inteligencia de Costos)
+    const costMap: Record<string, number> = {};
+    if (isContable && isSalida) {
+      // Ordenar entradas por fecha ascendente para quedarnos con el precio más reciente
+      const entradas = movimientos.filter(m => m.tipo === 'ENTRADA' && !m.eliminado).sort((a, b) => a.fecha.localeCompare(b.fecha));
+      entradas.forEach(m => {
+        if (m.costoUnit && m.costoUnit > 0) {
+          costMap[`${m.descripcion}___${m.unidad}`] = m.costoUnit;
+        }
+      });
     }
 
     // Chart 1: Group by Area or Supplier
@@ -64,32 +69,64 @@ export default function ReportTab({ user, movimientos, showToast }: ReportTabPro
       let groupKey = r.area;
       if (repTipo === 'AJUSTE') {
         groupKey = r.tipo === 'ENTRADA' ? 'SUMAS (+) AJUSTE/CONTEO' : 'RESTAS (-) MERMAS FISICAS';
-      } else if (repTipo === 'ENTRADA' && user.module === 'COMPRAS') {
+      } else if (isEntrada && user.module === 'COMPRAS') {
         groupKey = r.prov || r.area;
       }
-      byArea[groupKey] = (byArea[groupKey] || 0) + r.cantidad;
+      
+      let valToAdd = r.cantidad;
+      if (isContable) {
+        let cUnit = r.costoUnit || 0;
+        if (isSalida && cUnit === 0) {
+          cUnit = costMap[`${r.descripcion}___${r.unidad}`] || 0;
+        }
+        valToAdd = cUnit * r.cantidad;
+      }
+      byArea[groupKey] = (byArea[groupKey] || 0) + valToAdd;
     });
     const sortedAreas = Object.entries(byArea).sort((a, b) => b[1] - a[1]).slice(0, 10);
 
     // Chart 2: Group by Product Description
     const byProduct: Record<string, number> = {};
     movsReporte.forEach(r => {
-      byProduct[r.descripcion] = (byProduct[r.descripcion] || 0) + r.cantidad;
+      let valToAdd = r.cantidad;
+      if (isContable) {
+        let cUnit = r.costoUnit || 0;
+        if (isSalida && cUnit === 0) {
+          cUnit = costMap[`${r.descripcion}___${r.unidad}`] || 0;
+        }
+        valToAdd = cUnit * r.cantidad;
+      }
+      byProduct[r.descripcion] = (byProduct[r.descripcion] || 0) + valToAdd;
     });
     const sortedProducts = Object.entries(byProduct).sort((a, b) => b[1] - a[1]).slice(0, 10);
 
-    // Sort transactions chronologically secondary
+    // Sort transactions chronologically
     const sortedTx = [...movsReporte].sort((a, b) => {
       if (a.fecha === b.fecha) return b.id - a.id;
       return b.fecha.localeCompare(a.fecha);
     });
 
     const sumQty = movsReporte.reduce((sum, item) => sum + item.cantidad, 0);
+    const sumCost = sortedTx.reduce((sum, r) => {
+      let cUnit = r.costoUnit || 0;
+      if (isContable && isSalida && cUnit === 0) {
+        cUnit = costMap[`${r.descripcion}___${r.unidad}`] || 0;
+      }
+      return sum + (cUnit * r.cantidad);
+    }, 0);
 
     setTotalFilteredQty(sumQty);
+    setTotalFilteredCost(sumCost);
     setReportAreas(sortedAreas);
     setReportProducts(sortedProducts);
-    setFilteredTransactions(sortedTx);
+    // Agregamos el costo dinámico a las transacciones filtradas para usarlo en la tabla y en el Excel
+    setFilteredTransactions(sortedTx.map(r => {
+      let cUnit = r.costoUnit || 0;
+      if (isContable && isSalida && cUnit === 0) {
+        cUnit = costMap[`${r.descripcion}___${r.unidad}`] || 0;
+      }
+      return { ...r, costoUnit: cUnit, costoTotal: cUnit * r.cantidad };
+    }));
     setHasData(true);
   };
 
@@ -97,66 +134,74 @@ export default function ReportTab({ user, movimientos, showToast }: ReportTabPro
     runReport();
   }, [repTipo, movimientos]);
 
-  const handleExportCSVReport = () => {
+  const handleExportExcelReport = () => {
     if (filteredTransactions.length === 0) {
       showToast('Es necesario generar un reporte filtrado primero', 'error');
       return;
     }
 
-    const bom = '\uFEFF';
-    let csv = bom + `REPORTE OFICIAL DE ${repTipo}S (${user.module})\n\n`;
-    
-    if (user.module === 'COMPRAS') {
-      csv += 'TIPO,FECHA,CANTIDAD,DESCRIPCIÓN,UNIDAD,ÁREA/ORIGEN,PROVEEDOR,FACTURA,FECHA FACTURA,COSTO UNITARIO,COSTO TOTAL,N_AUTORIZACION,QUIEN_RECIBE,RESPONSABLE_AREA,NOTAS,RESPONSABLE_SISTEMA\n';
-    } else {
-      csv += 'TIPO,FECHA,CANTIDAD,DESCRIPCIÓN,UNIDAD,ÁREA/ORIGEN,NOTAS,RESPONSABLE\n';
-    }
+    const isContable = repTipo.includes('CONTABLE');
 
-    filteredTransactions.forEach(r => {
+    // 1. Pestaña de Transacciones (Detalle a Detalle)
+    const dataToExport = filteredTransactions.map(r => {
+      const baseRow: any = {
+        'TIPO': r.tipo,
+        'FECHA': formatearFecha(r.fecha),
+        'CANTIDAD': r.cantidad,
+        'DESCRIPCIÓN': r.descripcion,
+        'UNIDAD': r.unidad,
+        'ÁREA / DESTINO': r.area,
+      };
+
       if (user.module === 'COMPRAS') {
-        csv += [
-          r.tipo,
-          formatearFecha(r.fecha),
-          r.cantidad,
-          `"${r.descripcion}"`,
-          `"${r.unidad}"`,
-          `"${r.area}"`,
-          `"${r.prov || ''}"`,
-          `"${r.fact || ''}"`,
-          `"${r.fechaFact ? formatearFecha(r.fechaFact) : ''}"`,
-          r.costoUnit || '',
-          r.costoTotal || '',
-          `"${r.aut || ''}"`,
-          `"${r.recibe || ''}"`,
-          `"${r.resp || ''}"`,
-          `"${r.notas || ''}"`,
-          `"${r.registradoPor}"`
-        ].join(',') + '\n';
-      } else {
-        csv += [
-          r.tipo,
-          r.fecha,
-          r.cantidad,
-          `"${r.descripcion}"`,
-          `"${r.unidad}"`,
-          `"${r.area}"`,
-          `"${r.notas || ''}"`,
-          `"${r.registradoPor}"`
-        ].join(',') + '\n';
+        baseRow['PROVEEDOR'] = r.prov || '';
+        baseRow['FACTURA / REMISIÓN'] = r.fact || '';
+        baseRow['FECHA FACTURA'] = r.fechaFact ? formatearFecha(r.fechaFact) : '';
       }
+
+      if (isContable) {
+        baseRow['PRECIO UNITARIO ($)'] = r.costoUnit || 0;
+        baseRow['VALOR / GASTO TOTAL ($)'] = r.costoTotal || 0;
+      }
+
+      if (user.module === 'COMPRAS') {
+        baseRow['N° AUTORIZACIÓN'] = r.aut || '';
+        baseRow['QUIEN RECIBE'] = r.recibe || '';
+        baseRow['RESPONSABLE ÁREA'] = r.resp || '';
+      }
+
+      baseRow['NOTAS / COMENTARIOS'] = r.notas || '';
+      baseRow['USUARIO SISTEMA'] = r.registradoPor;
+
+      return baseRow;
     });
 
-    csv += '\n\n--- RESUMEN TOP 10 ---\n\nTOP 10 ÁREAS/ORÍGENES (O TIPO DE AJUSTE),CANTIDAD TOTAL\n';
-    reportAreas.forEach(([area, cant]) => { csv += `"${area}",${cant}\n`; });
-    csv += '\nTOP 10 PRODUCTOS,CANTIDAD TOTAL\n';
-    reportProducts.forEach(([prod, cant]) => { csv += `"${prod}",${cant}\n`; });
+    // Fila final de sumatoria
+    if (isContable) {
+      const totalRow: any = { 'TIPO': 'TOTALES', 'FECHA': '', 'CANTIDAD': totalFilteredQty, 'DESCRIPCIÓN': '', 'UNIDAD': '', 'ÁREA / DESTINO': '' };
+      if (user.module === 'COMPRAS') { totalRow['PROVEEDOR'] = ''; totalRow['FACTURA / REMISIÓN'] = ''; totalRow['FECHA FACTURA'] = ''; }
+      totalRow['PRECIO UNITARIO ($)'] = '';
+      totalRow['VALOR / GASTO TOTAL ($)'] = totalFilteredCost;
+      dataToExport.push(totalRow);
+    }
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `CCU_Reporte_Analitico_${repTipo}_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    showToast('Reporte exportado correctamente a un archivo CSV/Excel', 'success');
+    const worksheet1 = XLSX.utils.json_to_sheet(dataToExport);
+
+    // 2. Pestaña de Resumen y Gráficas (Top 10)
+    const metricName = isContable ? 'Valor Total ($)' : 'Cantidad Total (U)';
+    const summaryData = [
+      ...reportAreas.map(([area, val]) => ({ 'Categoría': 'Origen / Destino', 'Nombre': area, [metricName]: val })),
+      { 'Categoría': '', 'Nombre': '', [metricName]: null }, // Fila vacía de separación
+      ...reportProducts.map(([prod, val]) => ({ 'Categoría': 'Producto', 'Nombre': prod, [metricName]: val }))
+    ];
+    const worksheet2 = XLSX.utils.json_to_sheet(summaryData);
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet1, "Detalle_Transacciones");
+    XLSX.utils.book_append_sheet(workbook, worksheet2, "Resumen_Top10");
+
+    XLSX.writeFile(workbook, `CCU_Reporte_Analitico_${repTipo}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    showToast('Reporte exportado correctamente a un archivo Excel Oficial', 'success');
   };
 
   const chartColors = [
@@ -164,6 +209,8 @@ export default function ReportTab({ user, movimientos, showToast }: ReportTabPro
     'bg-purple-600', 'bg-red-600', 'bg-orange-600', 'bg-teal-600',
     'bg-indigo-600', 'bg-pink-600'
   ];
+
+  const isContable = repTipo.includes('CONTABLE');
 
   return (
     <div className="space-y-6">
@@ -181,65 +228,57 @@ export default function ReportTab({ user, movimientos, showToast }: ReportTabPro
         <select
           value={repTipo}
           onChange={(e) => setRepTipo(e.target.value as any)}
-          className="flex-1 text-xs md:text-sm border border-[#ddd9d0] rounded-lg p-2.5 bg-white focus:border-blue-600 focus:outline-none transition-colors min-w-[250px]"
+          className="flex-1 text-xs md:text-sm border border-[#ddd9d0] rounded-lg p-2.5 bg-white focus:border-blue-600 focus:outline-none transition-colors min-w-[250px] font-semibold"
         >
-          <option value="SALIDA">Reporte de Salidas (Consumo Real)</option>
-          <option value="ENTRADA">Reporte de Entradas (Ingresos Registrados)</option>
+          <option value="SALIDA">Reporte de Salidas (Volumen Físico)</option>
+          <option value="ENTRADA">Reporte de Entradas (Volumen Físico)</option>
           <option value="AJUSTE">Reporte de Ajustes Manuales (Mermas vs Devoluciones)</option>
+          {user.module === 'COMPRAS' && (
+            <>
+              <option value="ENTRADA_CONTABLE" className="font-bold text-emerald-700">💰 Rep. ENTRADAS CONTABLE (Facturación y Gasto)</option>
+              <option value="SALIDA_CONTABLE" className="font-bold text-emerald-700">💰 Rep. SALIDAS CONTABLE (Costo de Consumo por Área)</option>
+            </>
+          )}
         </select>
 
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
-          <input
-            type="date"
-            value={fechaIni}
-            onChange={(e) => setFechaIni(e.target.value)}
-            title="Desde"
-            className="w-full sm:w-auto text-xs md:text-sm border border-[#ddd9d0] rounded-lg p-2 bg-white focus:outline-none"
-          />
+          <input type="date" value={fechaIni} onChange={(e) => setFechaIni(e.target.value)} title="Desde" className="w-full sm:w-auto text-xs md:text-sm border border-[#ddd9d0] rounded-lg p-2 bg-white focus:outline-none" />
           <span className="text-gray-400 text-xs hidden sm:inline">a</span>
-          <input
-            type="date"
-            value={fechaFin}
-            onChange={(e) => setFechaFin(e.target.value)}
-            title="Hasta"
-            className="w-full sm:w-auto text-xs md:text-sm border border-[#ddd9d0] rounded-lg p-2 bg-white focus:outline-none"
-          />
+          <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} title="Hasta" className="w-full sm:w-auto text-xs md:text-sm border border-[#ddd9d0] rounded-lg p-2 bg-white focus:outline-none" />
         </div>
 
-        <button
-          onClick={runReport}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs md:text-sm font-bold flex items-center justify-center gap-1.5 cursor-pointer"
-        >
-          <BarChart3 size={14} />
-          Generar Reporte
+        <button onClick={runReport} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs md:text-sm font-bold flex items-center justify-center gap-1.5 cursor-pointer">
+          <BarChart3 size={14} /> Generar Reporte
         </button>
 
         {hasData && (
           <div className="flex gap-2 ml-auto">
-            <button
-              onClick={() => window.print()}
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-50 border border-gray-300 text-gray-700 hover:bg-gray-100 flex items-center gap-1 cursor-pointer"
-            >
-              <Printer size={13} />
-              Imprimir
+            <button onClick={() => window.print()} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-50 border border-gray-300 text-gray-700 hover:bg-gray-100 flex items-center gap-1 cursor-pointer">
+              <Printer size={13} /> Imprimir
             </button>
-            <button
-              onClick={handleExportCSVReport}
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-50 border border-gray-300 text-gray-700 hover:bg-gray-100 flex items-center gap-1 cursor-pointer"
-            >
-              <Download size={13} />
-              Excel
+            <button onClick={handleExportExcelReport} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1 cursor-pointer">
+              <FileSpreadsheet size={13} /> Excel Oficial
             </button>
           </div>
         )}
       </div>
 
       {hasData && (
-        <div className="bg-sky-50 border border-sky-100 p-4 rounded-xl text-sky-850 flex items-center gap-2.5">
-          <Percent size={18} className="text-sky-600" />
-          <span className="text-xs md:text-sm font-semibold">
-            <b>Volumen Total Procesado:</b> {totalFilteredQty} U. (acumuladas para los filtros activos)
-          </span>
+        <div className="bg-sky-50 border border-sky-200 p-4 rounded-xl flex flex-col md:flex-row gap-4 justify-between items-start md:items-center shadow-sm">
+          <div className="flex items-center gap-2.5 text-sky-800">
+            <Percent size={18} className="text-sky-600" />
+            <span className="text-xs md:text-sm font-semibold">
+              <b>Volumen de Artículos:</b> {totalFilteredQty} U. (Acumulado periodo)
+            </span>
+          </div>
+          {isContable && (
+            <div className="flex items-center gap-2.5 text-emerald-800 bg-emerald-100/50 px-4 py-1.5 rounded-lg border border-emerald-200">
+              <DollarSign size={18} className="text-emerald-600" />
+              <span className="text-sm md:text-base font-bold">
+                Balance Gasto / Valor: ${totalFilteredCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -255,20 +294,18 @@ export default function ReportTab({ user, movimientos, showToast }: ReportTabPro
             {/* Chart 1 */}
             <div className="bg-white border border-[#ddd9d0] rounded-xl p-5 shadow-sm space-y-4">
               <h3 className="text-xs md:text-sm font-bold text-gray-800 uppercase tracking-wide flex items-center gap-1.5">
-                {repTipo === 'SALIDA' ? (
+                {repTipo.includes('SALIDA') ? (
                   <><span>🏢</span>Destinos (Áreas de Consumo Real)</>
-                ) : repTipo === 'ENTRADA' ? (
+                ) : repTipo.includes('ENTRADA') ? (
                   <><span>🏬</span>Orígenes / Proveedores Registrados</>
                 ) : (
                   <><span>⚖️</span>Balance General de Modificaciones</>
                 )}
               </h3>
               <p className="text-[10px] md:text-xs text-gray-500">
-                {repTipo === 'SALIDA' 
-                  ? 'Artículos transferidos por departamento (excluye auditorías)' 
-                  : repTipo === 'ENTRADA' 
-                    ? 'Ingresos directos aportados al inventario' 
-                    : 'Comparativa de correcciones positivas (+) frente a mermas físicas (-)'}
+                {repTipo.includes('SALIDA') ? `Consumo ${isContable ? 'en Dólares/Pesos' : 'en Volumen'} transferido por área` 
+                  : repTipo.includes('ENTRADA') ? `Ingresos directos ${isContable ? 'en Gasto Monetario' : 'en Volumen'} al inventario` 
+                  : 'Comparativa de correcciones'}
               </p>
 
               <div className="space-y-3.5 pr-1 pt-2">
@@ -276,23 +313,16 @@ export default function ReportTab({ user, movimientos, showToast }: ReportTabPro
                   const maxQty = reportAreas[0]?.[1] || 1;
                   const ratio = Math.max(2, Math.round((qty / maxQty) * 100));
                   let barColor = chartColors[i % chartColors.length];
-                  if (repTipo === 'AJUSTE') {
-                    barColor = area.includes('SUMAS') ? 'bg-emerald-600' : 'bg-red-600';
-                  }
+                  if (repTipo === 'AJUSTE') barColor = area.includes('SUMAS') ? 'bg-emerald-600' : 'bg-red-600';
 
                   return (
                     <div key={area} className="flex items-center gap-3 text-xs md:text-sm">
-                      <div className="w-40 flex-shrink-0 font-medium text-gray-600 truncate uppercase" title={area}>
-                        {area}
-                      </div>
+                      <div className="w-40 flex-shrink-0 font-medium text-gray-600 truncate uppercase" title={area}>{area}</div>
                       <div className="flex-1 h-5.5 bg-gray-100 rounded-md overflow-hidden relative border border-gray-200/50">
-                        <div 
-                          className={`h-full ${barColor} rounded-md transition-all duration-500 ease-out`} 
-                          style={{ width: `${ratio}%` }}
-                        />
+                        <div className={`h-full ${barColor} rounded-md transition-all duration-500 ease-out`} style={{ width: `${ratio}%` }} />
                       </div>
-                      <div className="w-14 text-right font-bold text-gray-700 font-mono text-xs">
-                        {qty} U.
+                      <div className="w-20 text-right font-bold text-gray-700 font-mono text-[11px] whitespace-nowrap">
+                        {isContable ? `$${qty.toLocaleString('en-US')}` : `${qty} U.`}
                       </div>
                     </div>
                   );
@@ -303,20 +333,18 @@ export default function ReportTab({ user, movimientos, showToast }: ReportTabPro
             {/* Chart 2 */}
             <div className="bg-white border border-[#ddd9d0] rounded-xl p-5 shadow-sm space-y-4">
               <h3 className="text-xs md:text-sm font-bold text-gray-800 uppercase tracking-wide flex items-center gap-1.5">
-                {repTipo === 'SALIDA' ? (
+                {repTipo.includes('SALIDA') ? (
                   <><span>📦</span>Insumos de Mayor Rotación</>
-                ) : repTipo === 'ENTRADA' ? (
+                ) : repTipo.includes('ENTRADA') ? (
                   <><span>📦</span>Insumos de Mayor Abasto</>
                 ) : (
                   <><span>📦</span>Insumos Modificados por Conteo</>
                 )}
               </h3>
               <p className="text-[10px] md:text-xs text-gray-500">
-                {repTipo === 'SALIDA' 
-                  ? 'Consumo acumulado de piezas por artículo' 
-                  : repTipo === 'ENTRADA' 
-                    ? 'Volumen total de mercancías ingresadas' 
-                    : 'Artículos con más incidencias de ajuste manual'}
+                {repTipo.includes('SALIDA') ? `Consumo acumulado de ${isContable ? 'Costo de' : 'Piezas por'} artículo` 
+                  : repTipo.includes('ENTRADA') ? `${isContable ? 'Valor Monetario' : 'Volumen Total'} de mercancías ingresadas` 
+                  : 'Artículos con más incidencias manuales'}
               </p>
 
               <div className="space-y-3.5 pr-1 pt-2">
@@ -327,17 +355,12 @@ export default function ReportTab({ user, movimientos, showToast }: ReportTabPro
 
                   return (
                     <div key={product} className="flex items-center gap-3 text-xs md:text-sm">
-                      <div className="w-40 flex-shrink-0 font-medium text-gray-600 truncate uppercase" title={product}>
-                        {product}
-                      </div>
+                      <div className="w-40 flex-shrink-0 font-medium text-gray-600 truncate uppercase" title={product}>{product}</div>
                       <div className="flex-1 h-5.5 bg-gray-100 rounded-md overflow-hidden relative border border-gray-200/50">
-                        <div 
-                          className={`h-full ${barColor} rounded-md transition-all duration-500 ease-out`} 
-                          style={{ width: `${ratio}%` }}
-                        />
+                        <div className={`h-full ${barColor} rounded-md transition-all duration-500 ease-out`} style={{ width: `${ratio}%` }} />
                       </div>
-                      <div className="w-14 text-right font-bold text-gray-700 font-mono text-xs">
-                        {qty} U.
+                      <div className="w-20 text-right font-bold text-gray-700 font-mono text-[11px] whitespace-nowrap">
+                        {isContable ? `$${qty.toLocaleString('en-US')}` : `${qty} U.`}
                       </div>
                     </div>
                   );
@@ -362,66 +385,48 @@ export default function ReportTab({ user, movimientos, showToast }: ReportTabPro
                     <th className="px-4 py-3">Descripción</th>
                     <th className="px-4 py-3">Unidad</th>
                     <th className="px-4 py-3">Destino/Procedencia</th>
-                    {user.module === 'COMPRAS' && (
-                      <th className="px-4 py-3">Detalle Proveedor / Compras</th>
-                    )}
+                    {isContable && <th className="px-4 py-3 bg-emerald-50 text-emerald-800 border-l border-emerald-100">Precio Unit.</th>}
+                    {isContable && <th className="px-4 py-3 bg-emerald-50 text-emerald-800 border-r border-emerald-100">Valor Total</th>}
+                    {user.module === 'COMPRAS' && <th className="px-4 py-3">Detalle Extra</th>}
                     <th className="px-4 py-3">Notas</th>
                     <th className="px-4 py-3">Usuario</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#ddd9d0] whitespace-nowrap">
                   {filteredTransactions.map((m) => {
-                    const tagColor = m.tipo === 'ENTRADA' 
-                      ? 'bg-green-50 text-green-700' 
-                      : 'bg-red-50 text-red-700';
+                    const tagColor = m.tipo === 'ENTRADA' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700';
 
                     return (
                       <tr key={m.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3.5 font-mono text-[11px] text-gray-500">
-                          {formatearFecha(m.fecha)}
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold uppercase ${m.area === 'AJUSTE MANUAL' ? 'bg-purple-100 text-purple-700' : tagColor}`}>
-                            {m.tipo}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5 font-bold text-gray-900">
-                          {m.cantidad}
-                        </td>
-                        <td className="px-4 py-3.5 font-semibold text-gray-800">
-                          {m.descripcion}
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className="inline-block bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px] font-semibold">
-                            {m.unidad}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5 text-gray-600 font-medium">
-                          {m.area}
-                        </td>
-                        {user.module === 'COMPRAS' && (
-                          <td className="px-4 py-3.5 text-[11px] text-gray-500 leading-normal">
-                            {m.tipo === 'ENTRADA' && m.area !== 'AJUSTE MANUAL' ? (
-                              <div>
-                                <b>Prov:</b> {m.prov || '-'} | <b>Fact/Rem:</b> {m.fact || '-'}
-                                <br />
-                                <b>Costo U:</b> ${m.costoUnit || '0'} (Total: ${m.costoTotal || '0'})
-                              </div>
-                            ) : m.tipo === 'SALIDA' && m.area !== 'AJUSTE MANUAL' ? (
-                              <div>
-                                <b>Recibe:</b> {m.recibe || '-'} | <b>Resp. Área:</b> {m.resp || '-'}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
+                        <td className="px-4 py-3.5 font-mono text-[11px] text-gray-500">{formatearFecha(m.fecha)}</td>
+                        <td className="px-4 py-3.5"><span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold uppercase ${m.area === 'AJUSTE MANUAL' ? 'bg-purple-100 text-purple-700' : tagColor}`}>{m.tipo}</span></td>
+                        <td className="px-4 py-3.5 font-bold text-gray-900">{m.cantidad}</td>
+                        <td className="px-4 py-3.5 font-semibold text-gray-800">{m.descripcion}</td>
+                        <td className="px-4 py-3.5"><span className="inline-block bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px] font-semibold">{m.unidad}</span></td>
+                        <td className="px-4 py-3.5 text-gray-600 font-bold">{m.area}</td>
+                        
+                        {isContable && (
+                          <td className="px-4 py-3.5 font-mono text-[11px] bg-emerald-50/30 border-l border-emerald-50 text-emerald-700">
+                            ${(m.costoUnit || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}
                           </td>
                         )}
-                        <td className="px-4 py-3.5 text-gray-500 truncate max-w-[200px]">
-                          {m.notas || ''}
-                        </td>
-                        <td className="px-4 py-3.5 font-medium text-gray-600">
-                          {m.registradoPor}
-                        </td>
+                        {isContable && (
+                          <td className="px-4 py-3.5 font-mono text-[11px] font-bold bg-emerald-50/30 border-r border-emerald-50 text-emerald-800">
+                            ${(m.costoTotal || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}
+                          </td>
+                        )}
+
+                        {user.module === 'COMPRAS' && (
+                          <td className="px-4 py-3.5 text-[10px] text-gray-500 leading-tight">
+                            {m.tipo === 'ENTRADA' && m.area !== 'AJUSTE MANUAL' ? (
+                              <div><b>Prov:</b> {m.prov || '-'}<br/><b>Fact:</b> {m.fact || '-'}</div>
+                            ) : m.tipo === 'SALIDA' && m.area !== 'AJUSTE MANUAL' ? (
+                              <div><b>Recibe:</b> {m.recibe || '-'}<br/><b>Área:</b> {m.resp || '-'}</div>
+                            ) : <span className="text-gray-400">—</span>}
+                          </td>
+                        )}
+                        <td className="px-4 py-3.5 text-gray-500 truncate max-w-[150px] text-[11px]">{m.notas || ''}</td>
+                        <td className="px-4 py-3.5 font-medium text-gray-600 text-[11px]">{m.registradoPor}</td>
                       </tr>
                     );
                   })}

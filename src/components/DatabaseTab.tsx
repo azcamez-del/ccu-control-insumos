@@ -30,8 +30,9 @@ export default function DatabaseTab({
 
   const isRespSalidas = user.role === 'responsable_salidas';
   const isRespEntradas = user.role === 'responsable_entradas';
-  const isAdmin = user.role === 'admin';
-  const isSup = user.role === 'supervisor';
+  const isAdmin = user.role === 'admin' || user.role === 'admin_contable';
+  const isSup = user.role === 'supervisor' || user.role === 'sup_contable';
+  const isConta = user.module === 'CONTABILIDAD';
 
   const filteredMovs = movimientos.filter(m => {
     if (showAuditVault) {
@@ -53,7 +54,8 @@ export default function DatabaseTab({
       const matchProv = (m.prov || '').toUpperCase().includes(q);
       const matchFact = (m.fact || '').toUpperCase().includes(q);
       const matchUser = m.registradoPor.toUpperCase().includes(q);
-      if (!matchDesc && !matchArea && !matchProv && !matchFact && !matchUser) return false;
+      const matchSerie = (m.serie || '').toUpperCase().includes(q);
+      if (!matchDesc && !matchArea && !matchProv && !matchFact && !matchUser && !matchSerie) return false;
     }
 
     return true;
@@ -72,13 +74,40 @@ export default function DatabaseTab({
       return;
     }
     
-    // Preparar los datos para Excel
+    // Preparar los datos para Excel dependiendo del Módulo
     const dataToExport = [...validMovs]
       .sort((a, b) => { 
         if (a.fecha === b.fecha) return b.id - a.id; 
         return b.fecha.localeCompare(a.fecha); 
       })
       .map(r => {
+        if (isConta) {
+          return {
+            'TIPO': r.tipo === 'FACTURA_GASTO' ? 'FACTURA' : r.tipo,
+            'FECHA': formatearFecha(r.fecha),
+            'CANTIDAD': r.cantidad,
+            'CONCEPTO / ARTÍCULO': r.descripcion,
+            'UNIDAD': r.unidad,
+            'CATEGORÍA DE GASTO': r.categoriaGasto || '',
+            'CENTRO DE COSTO': r.area,
+            'PROVEEDOR': r.prov || '',
+            'FOLIO FACTURA': r.fact || '',
+            'FECHA EMISIÓN': r.fechaFact ? formatearFecha(r.fechaFact) : '',
+            'HORA EMISIÓN': r.horaFact || '',
+            'MÉTODO PAGO': r.metodoPago || '',
+            'TIPO DE RECURSO': r.tipoRecurso || '',
+            'MARCA': r.marca || '',
+            'MODELO': r.modelo || '',
+            'SERIE / LOTE': r.serie || '',
+            'PRECIO UNITARIO ($)': r.costoUnit || 0,
+            'IMPORTE PARCIAL ($)': r.costoTotal || 0,
+            'IMPUESTOS ($)': r.impuestos || 0,
+            'TOTAL FACTURA ($)': r.totalFactura || 0,
+            'NOTAS / COMENTARIOS': r.notas || '',
+            'USUARIO SISTEMA': r.registradoPor
+          };
+        }
+
         if (user.module === 'COMPRAS') {
           return {
             'TIPO': r.tipo,
@@ -99,6 +128,7 @@ export default function DatabaseTab({
             'USUARIO SISTEMA': r.registradoPor
           };
         }
+        
         return {
             'TIPO': r.tipo,
             'FECHA': formatearFecha(r.fecha),
@@ -111,12 +141,11 @@ export default function DatabaseTab({
         };
       });
 
-    // Crear el libro de Excel y descargarlo
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Historial_Movimientos");
+    XLSX.utils.book_append_sheet(workbook, worksheet, isConta ? "Diario_Contable" : "Historial_Movimientos");
     
-    const prefix = showAuditVault ? 'Auditoria_Eliminados_' : 'Bitacora_General_';
+    const prefix = showAuditVault ? 'Auditoria_Eliminados_' : (isConta ? 'Libro_Diario_' : 'Bitacora_General_');
     XLSX.writeFile(workbook, `${prefix}${user.module}_${new Date().toISOString().slice(0, 10)}.xlsx`);
     
     showToast('Archivo Excel generado y descargado correctamente', 'success');
@@ -137,13 +166,13 @@ export default function DatabaseTab({
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#ddd9d0] gap-4">
         <div>
-          <h2 className={`text-xl md:text-2xl font-bold font-sans ${showAuditVault ? 'text-purple-800' : 'text-gray-900'}`}>
-            {showAuditVault ? '🛡️ Bóveda de Auditoría (Eliminados)' : 'Historial de Movimientos'}
+          <h2 className={`text-xl md:text-2xl font-bold font-sans ${showAuditVault ? 'text-purple-800' : (isConta ? 'text-amber-800' : 'text-gray-900')}`}>
+            {showAuditVault ? '🛡️ Bóveda de Auditoría (Eliminados)' : (isConta ? 'Historial y Diario Contable' : 'Historial de Movimientos')}
           </h2>
           <p className="text-xs md:text-sm text-gray-500 mt-1">
             {showAuditVault 
               ? 'Área restringida. Visualizando registros anulados por el personal.' 
-              : 'Bitácora de todos los registros válidos del almacén.'}
+              : (isConta ? 'Registro detallado de facturas, activos y gastos.' : 'Bitácora de todos los registros válidos del almacén.')}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -151,7 +180,6 @@ export default function DatabaseTab({
             <RefreshCw size={13} /> Sincronizar
           </button>
           
-          {/* El botón de auditar sigue siendo SOLO para el Admin */}
           {isAdmin && (
             <button
               onClick={() => setShowAuditVault(!showAuditVault)}
@@ -161,14 +189,12 @@ export default function DatabaseTab({
             </button>
           )}
 
-          {/* AQUÍ ESTÁ EL CAMBIO: Ahora Admin Y Supervisor pueden descargar el Excel */}
           {(isAdmin || isSup) && (
-            <button onClick={handleExportExcel} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5 cursor-pointer">
+            <button onClick={handleExportExcel} className={`px-3 py-1.5 text-xs font-semibold rounded-lg border flex items-center gap-1.5 cursor-pointer ${isConta ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'}`}>
               <FileSpreadsheet size={13} /> {showAuditVault ? 'Excel Auditoría' : 'Descargar a Excel'}
             </button>
           )}
-
-          {/* Vaciar bóveda sigue siendo SOLO para el Admin y solo dentro de la bóveda */}
+          
           {isAdmin && showAuditVault && (
             <button onClick={handleClearHistoryConfirm} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 border border-red-200 text-red-650 hover:bg-red-100 text-red-700 flex items-center gap-1.5 cursor-pointer">
               <Trash size={13} /> Vaciar Bóveda
@@ -178,12 +204,16 @@ export default function DatabaseTab({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 bg-white border border-[#ddd9d0] p-4 rounded-xl shadow-sm">
-        {!isRespSalidas && !isRespEntradas ? (
+        {!isConta && !isRespSalidas && !isRespEntradas ? (
           <select value={tipoFilter} onChange={(e) => setTipoFilter(e.target.value)} className="w-full text-xs md:text-sm border border-[#ddd9d0] rounded-lg p-2 bg-white focus:border-blue-600 focus:outline-none transition-colors">
             <option value="">Todos los movimientos</option>
             <option value="ENTRADA">Solo Entradas</option>
             <option value="SALIDA">Solo Salidas</option>
           </select>
+        ) : isConta ? (
+          <div className="text-xs text-amber-800 bg-amber-100 font-bold tracking-wider px-3 py-2 rounded-lg flex items-center uppercase">
+            📊 DIARIO DE FACTURAS Y GASTOS
+          </div>
         ) : (
           <div className="text-xs text-gray-600 bg-gray-100 font-bold tracking-wider px-3 py-2 rounded-lg flex items-center uppercase">
             🚀 {isRespSalidas ? 'FILTRADO: SOLO ENTREGAS' : 'FILTRADO: SOLO RECEPCIONES'}
@@ -192,7 +222,7 @@ export default function DatabaseTab({
 
         <div className="relative col-span-1 sm:col-span-1 md:col-span-1 flex items-center border border-[#ddd9d0] rounded-lg px-2 bg-white focus-within:border-blue-600 transition-colors">
           <Search size={14} className="text-gray-400 mr-2 flex-shrink-0" />
-          <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className="w-full text-xs md:text-sm text-gray-900 bg-white focus:outline-none uppercase" />
+          <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder={isConta ? "Buscar Factura, Serie..." : "Buscar..."} className="w-full text-xs md:text-sm text-gray-900 bg-white focus:outline-none uppercase" />
         </div>
 
         <input type="date" value={fechaIni} onChange={(e) => setFechaIni(e.target.value)} title="Fecha de Inicio" className="w-full text-xs md:text-sm border border-[#ddd9d0] rounded-lg p-2 bg-white focus:border-blue-600 focus:outline-none" />
@@ -209,35 +239,75 @@ export default function DatabaseTab({
             <table className="w-full border-collapse text-left text-xs md:text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-[#ddd9d0] font-sans font-bold text-[10px] md:text-xs text-gray-500 tracking-wider uppercase">
-                  <th className="px-4 py-3.5">F. Registro</th><th className="px-4 py-3.5">Tipo</th><th className="px-4 py-3.5">Cant.</th>
-                  <th className="px-4 py-3.5">Descripción</th><th className="px-4 py-3.5">Unidad</th><th className="px-4 py-3.5">Área de Destino</th>
-                  {user.module === 'COMPRAS' && <th className="px-4 py-3.5">Detalles Finanzas / Destinatario</th>}
-                  <th className="px-4 py-3.5">Comentarios</th><th className="px-4 py-3.5">Usuario</th><th className="px-4 py-3.5 text-center">Acciones</th>
+                  <th className="px-4 py-3.5">F. Registro</th>
+                  <th className="px-4 py-3.5">Tipo</th>
+                  <th className="px-4 py-3.5">Cant.</th>
+                  <th className="px-4 py-3.5">{isConta ? 'Concepto / Artículo' : 'Descripción'}</th>
+                  {isConta && <th className="px-4 py-3.5">Detalle Factura</th>}
+                  {isConta && <th className="px-4 py-3.5">Identificación Fija</th>}
+                  {!isConta && <th className="px-4 py-3.5">Unidad</th>}
+                  <th className="px-4 py-3.5">{isConta ? 'Centro Costo' : 'Área de Destino'}</th>
+                  {user.module === 'COMPRAS' && !isConta && <th className="px-4 py-3.5">Detalles Finanzas / Destinatario</th>}
+                  <th className="px-4 py-3.5">Comentarios</th>
+                  <th className="px-4 py-3.5">Usuario</th>
+                  <th className="px-4 py-3.5 text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#ddd9d0] whitespace-nowrap">
                 {filteredMovs.map((m) => {
-                  const tagColor = m.tipo === 'ENTRADA' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200';
+                  const tagColor = m.tipo === 'FACTURA_GASTO' ? 'bg-amber-100 text-amber-800 border-amber-200' : (m.tipo === 'ENTRADA' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200');
                   const isAdjustment = m.area === 'AJUSTE MANUAL';
                   const isRowDeleted = m.eliminado;
 
                   return (
                     <tr key={m.id} className={`hover:bg-gray-50 transition-colors ${isRowDeleted ? 'bg-red-50 text-red-800' : ''}`}>
                       <td className="px-4 py-3.5 font-mono text-[11px] text-gray-600">{formatearFecha(m.fecha)}</td>
-                      <td className="px-4 py-3.5"><span className={`inline-block border px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${isAdjustment ? 'bg-purple-100 text-purple-700 border-purple-200' : tagColor}`}>{m.tipo}</span></td>
+                      <td className="px-4 py-3.5"><span className={`inline-block border px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${isAdjustment ? 'bg-purple-100 text-purple-700 border-purple-200' : tagColor}`}>{m.tipo === 'FACTURA_GASTO' ? 'FACTURA' : m.tipo}</span></td>
                       <td className="px-4 py-3.5 font-bold text-gray-900">{m.cantidad}</td>
-                      <td className="px-4 py-3.5 font-semibold text-gray-800 font-mono text-[12px]">{m.descripcion}</td>
-                      <td className="px-4 py-3.5"><span className="inline-block bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-semibold">{m.unidad}</span></td>
+                      <td className="px-4 py-3.5 font-semibold text-gray-800 font-mono text-[12px]">
+                        {m.descripcion}
+                        {isConta && <div className="text-[9px] text-gray-500 font-sans mt-0.5 font-bold">{m.categoriaGasto}</div>}
+                      </td>
+                      
+                      {isConta && (
+                        <td className="px-4 py-3.5 text-[11px] text-gray-600 leading-relaxed whitespace-normal min-w-[180px]">
+                          <div><b>Prov:</b> {m.prov || '-'}</div>
+                          <div><b>Folio:</b> {m.fact || '-'}</div>
+                          <div className="text-amber-700 font-bold mt-0.5 bg-amber-50 px-1 py-0.5 rounded inline-block border border-amber-100">Imp: ${(m.costoTotal || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+                        </td>
+                      )}
+                      
+                      {isConta && (
+                        <td className="px-4 py-3.5 text-[10px] text-gray-500 font-mono leading-relaxed whitespace-normal min-w-[150px]">
+                          {m.marca && <div>Mrc: {m.marca}</div>}
+                          {m.modelo && <div>Mod: {m.modelo}</div>}
+                          {m.serie && <div className="font-bold text-gray-700 bg-gray-100 px-1 py-0.5 rounded border border-gray-200 mt-0.5">S/N: {m.serie}</div>}
+                          {!m.marca && !m.serie && <span>N/A</span>}
+                        </td>
+                      )}
+
+                      {!isConta && <td className="px-4 py-3.5"><span className="inline-block bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-semibold">{m.unidad}</span></td>}
                       <td className="px-4 py-3.5 text-gray-600 font-medium">{m.area}</td>
-                      {user.module === 'COMPRAS' && (
+
+                      {/* DETALLE FINANCIERO INTACTO PARA COMPRAS */}
+                      {user.module === 'COMPRAS' && !isConta && (
                         <td className="px-4 py-3.5 text-[11px] leading-relaxed text-gray-500 whitespace-normal min-w-[200px]">
                           {m.tipo === 'ENTRADA' && !isAdjustment ? (
-                            <div><div><b>Proveedor:</b> {m.prov || '-'}</div><div><b>Factura/Rem:</b> {m.fact || '-'} {m.fechaFact ? `(${formatearFecha(m.fechaFact)})` : ''}</div><div><b>Costo U:</b> ${m.costoUnit || '0'} (Total: ${m.costoTotal || '0'})</div><div><b>N° Aut:</b> {m.aut || '-'}</div></div>
+                            <div>
+                              <div><b>Proveedor:</b> {m.prov || '-'}</div>
+                              <div><b>Factura/Rem:</b> {m.fact || '-'} {m.fechaFact ? `(${formatearFecha(m.fechaFact)})` : ''}</div>
+                              <div><b>Costo U:</b> ${(m.costoUnit || 0).toLocaleString('en-US')} (Total: ${(m.costoTotal || 0).toLocaleString('en-US')})</div>
+                              <div><b>N° Aut:</b> {m.aut || '-'}</div>
+                            </div>
                           ) : m.tipo === 'SALIDA' && !isAdjustment ? (
-                            <div><div><b>Recibe:</b> {m.recibe || '-'}</div><div><b>Resp. Área:</b> {m.resp || '-'}</div></div>
+                            <div>
+                              <div><b>Recibe:</b> {m.recibe || '-'}</div>
+                              <div><b>Resp. Área:</b> {m.resp || '-'}</div>
+                            </div>
                           ) : <span className="text-gray-400">—</span>}
                         </td>
                       )}
+                      
                       <td className="px-4 py-3.5 text-gray-500 max-w-[200px] truncate whitespace-normal">
                         {m.notas || ''}
                         {isRowDeleted && <div className="text-[10px] text-red-600 font-bold border-t border-red-200 pt-0.5 mt-1">🗑️ Anulado por: {m.eliminadoPor}</div>}

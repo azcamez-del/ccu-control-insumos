@@ -34,7 +34,6 @@ export default function DatabaseTab({
 
   const isRespSalidas = user.role === 'responsable_salidas';
   const isRespEntradas = user.role === 'responsable_entradas';
-  // CANDADO ESTRICTO: Solo administradores
   const isAdmin = user.role === 'admin' || user.role === 'admin_contable';
   const isSup = user.role === 'supervisor' || user.role === 'sup_contable';
   const isConta = user.module === 'CONTABILIDAD';
@@ -99,7 +98,7 @@ export default function DatabaseTab({
     XLSX.utils.book_append_sheet(workbook, worksheet, isConta ? "Diario_Contable" : "Historial_Movimientos");
     const prefix = showAuditVault ? 'Auditoria_Eliminados_' : (isConta ? 'Libro_Diario_' : 'Bitacora_General_');
     XLSX.writeFile(workbook, `${prefix}${user.module}_${new Date().toISOString().slice(0, 10)}.xlsx`);
-    showToast('Archivo Excel generado correctamente', 'success');
+    showToast('Archivo Excel generado', 'success');
   };
 
   const handleClearHistoryConfirm = () => {
@@ -172,7 +171,7 @@ export default function DatabaseTab({
                   {isConta && <th className="px-4 py-3.5">Identificación Fija</th>}
                   {!isConta && <th className="px-4 py-3.5">Unidad</th>}
                   <th className="px-4 py-3.5">{isConta ? 'Centro Costo' : 'Área de Destino'}</th>
-                  {user.module === 'COMPRAS' && !isConta && <th className="px-4 py-3.5">Detalles Finanzas</th>}
+                  {user.module === 'COMPRAS' && <th className="px-4 py-3.5">Detalles Finanzas / Destinatario</th>}
                   <th className="px-4 py-3.5">Comentarios</th><th className="px-4 py-3.5">Usuario</th><th className="px-4 py-3.5 text-center">Acciones</th>
                 </tr>
               </thead>
@@ -207,7 +206,7 @@ export default function DatabaseTab({
                       {!isConta && <td className="px-4 py-3.5"><span className="inline-block bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-semibold">{m.unidad}</span></td>}
                       <td className="px-4 py-3.5 text-gray-600 font-medium">{m.area}</td>
 
-                      {user.module === 'COMPRAS' && !isConta && (
+                      {user.module === 'COMPRAS' && (
                         <td className="px-4 py-3.5 text-[11px] leading-relaxed text-gray-500 whitespace-normal min-w-[200px]">
                           {m.tipo === 'ENTRADA' && !isAdjustment ? (
                             <div>
@@ -226,8 +225,8 @@ export default function DatabaseTab({
                       
                       <td className="px-4 py-3.5 text-center">
                         <div className="flex items-center justify-center gap-1.5">
-                          {/* BOTON DE EDITAR COSTOS: Solo para Administradores */}
-                          {!isRowDeleted && isAdmin && (m.tipo === 'ENTRADA' || m.tipo === 'FACTURA_GASTO') && !isAdjustment && (
+                          {/* BOTON DE EDITAR COSTOS: Bloqueado para Insumos */}
+                          {!isRowDeleted && (isAdmin || isSup) && user.module !== 'INSUMOS' && (m.tipo === 'ENTRADA' || m.tipo === 'FACTURA_GASTO') && !isAdjustment && (
                             <button onClick={() => openEdit(m)} title="Completar Datos Financieros" className="inline-flex items-center justify-center w-7 h-7 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 transition-all cursor-pointer">
                               <Edit size={13} />
                             </button>

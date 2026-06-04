@@ -6,13 +6,13 @@ interface AreasTabProps {
   user: User;
   areas: string[];
   proveedores: string[];
-  unidades: string[]; // <-- NUEVA PROP
+  unidades: string[]; 
   onAddArea: (area: string) => void;
   onRemoveArea: (area: string) => void;
   onAddProv: (prov: string) => void;
   onRemoveProv: (prov: string) => void;
-  onAddUnidad: (unidad: string) => void; // <-- NUEVA PROP
-  onRemoveUnidad: (unidad: string) => void; // <-- NUEVA PROP
+  onAddUnidad: (unidad: string) => void; 
+  onRemoveUnidad: (unidad: string) => void; 
   showToast: (msg: string, type?: 'success' | 'error' | 'warn' | 'info') => void;
 }
 
@@ -28,7 +28,6 @@ export default function AreasTab({
 
   const showProveedores = user.module === 'COMPRAS' || user.module === 'CONTABILIDAD';
   const isConta = user.module === 'CONTABILIDAD';
-  // Candado para que solo jefaturas de Compras puedan agregar Unidades:
   const showUnidades = user.module === 'COMPRAS' && (user.role === 'admin' || user.role === 'supervisor');
 
   const handleAddAreaSubmit = (e: React.FormEvent) => {
@@ -68,9 +67,9 @@ export default function AreasTab({
         <p className="text-xs md:text-sm text-gray-500 mt-1">Administre los catálogos base para autocompletar rápidamente los formularios de registro</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* ÁREAS CARD */}
-        <div className="bg-white border border-[#ddd9d0] rounded-xl p-5 md:p-6 shadow-sm space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* ÁREAS CARD (Ancho dinámico) */}
+        <div className={`bg-white border border-[#ddd9d0] rounded-xl p-5 md:p-6 shadow-sm space-y-4 col-span-1 ${showProveedores ? (showUnidades ? 'lg:col-span-4' : 'lg:col-span-6') : 'lg:col-span-12'}`}>
           <h3 className="text-sm md:text-base font-bold text-gray-800 tracking-wide uppercase border-b border-gray-100 pb-2">Catálogo de Áreas / Centros de Costo</h3>
           <form onSubmit={handleAddAreaSubmit} className="flex gap-2">
             <input type="text" value={newArea} onChange={(e) => setNewArea(e.target.value)} placeholder="Ej. DIRECCIÓN CCU" className="flex-1 border-1.5 border-[#ddd9d0] rounded-lg px-3 py-2 text-xs focus:border-blue-600 focus:outline-none uppercase" />
@@ -86,7 +85,7 @@ export default function AreasTab({
                 {filteredAreas.map((area) => (
                   <tr key={area} className="hover:bg-gray-50">
                     <td className="px-4 py-2 font-semibold text-gray-800 uppercase">{area}</td>
-                    <td className="px-4 py-2 text-center w-12"><button onClick={() => { if (confirm(`¿Retirar "${area}"?`)) { onRemoveArea(area); } }} className="text-red-500 hover:text-red-700"><Trash2 size={13} /></button></td>
+                    <td className="px-4 py-2 text-center w-12"><button onClick={() => { if (confirm(`¿Retirar "${area}"?`)) { onRemoveArea(area); } }} className="text-red-500 hover:text-red-700 cursor-pointer"><Trash2 size={13} /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -96,7 +95,7 @@ export default function AreasTab({
 
         {/* PROVEEDORES CARD */}
         {showProveedores && (
-          <div className="bg-white border border-[#ddd9d0] rounded-xl p-5 md:p-6 shadow-sm space-y-4">
+          <div className={`bg-white border border-[#ddd9d0] rounded-xl p-5 md:p-6 shadow-sm space-y-4 col-span-1 ${showUnidades ? 'lg:col-span-4' : 'lg:col-span-6'}`}>
             <h3 className="text-sm md:text-base font-bold text-gray-800 tracking-wide uppercase border-b border-gray-100 pb-2">Catálogo de Proveedores</h3>
             <form onSubmit={handleAddProvSubmit} className="flex gap-2">
               <input type="text" value={newProv} onChange={(e) => setNewProv(e.target.value)} placeholder="Ej. OFFICE DEPOT" className="flex-1 border-1.5 border-[#ddd9d0] rounded-lg px-3 py-2 text-xs focus:border-blue-600 focus:outline-none uppercase" />
@@ -112,7 +111,7 @@ export default function AreasTab({
                   {filteredProvs.map((prov) => (
                     <tr key={prov} className="hover:bg-gray-50">
                       <td className="px-4 py-2 font-semibold text-gray-800 uppercase">{prov}</td>
-                      <td className="px-4 py-2 text-center w-12"><button onClick={() => { if (confirm(`¿Retirar "${prov}"?`)) { onRemoveProv(prov); } }} className="text-red-500 hover:text-red-700"><Trash2 size={13} /></button></td>
+                      <td className="px-4 py-2 text-center w-12"><button onClick={() => { if (confirm(`¿Retirar "${prov}"?`)) { onRemoveProv(prov); } }} className="text-red-500 hover:text-red-700 cursor-pointer"><Trash2 size={13} /></button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -121,12 +120,11 @@ export default function AreasTab({
           </div>
         )}
 
-        {/* UNIDADES DE MEDIDA CARD (NUEVA - SOLO COMPRAS Y JEFATURAS) */}
+        {/* UNIDADES DE MEDIDA CARD */}
         {showUnidades && (
-          <div className="bg-white border border-[#ddd9d0] rounded-xl p-5 md:p-6 shadow-sm space-y-4 md:col-span-2 lg:col-span-1">
-            <h3 className="text-sm md:text-base font-bold text-gray-800 tracking-wide uppercase border-b border-gray-100 pb-2 text-emerald-800">Catálogo de Unidades de Medida</h3>
-            <p className="text-[10px] text-gray-500">Solo visible para jefaturas. Agregue unidades personalizadas (ej. BOTE, BOLSA) para sus formularios.</p>
-            <form onSubmit={handleAddUnidadSubmit} className="flex gap-2">
+          <div className="bg-white border border-[#ddd9d0] rounded-xl p-5 md:p-6 shadow-sm space-y-4 col-span-1 lg:col-span-4">
+            <h3 className="text-sm md:text-base font-bold text-gray-800 tracking-wide uppercase border-b border-gray-100 pb-2 text-emerald-800">Catálogo de Unidades</h3>
+            <form onSubmit={handleAddUnidadSubmit} className="flex gap-2 mt-[22px]">
               <input type="text" value={newUnidad} onChange={(e) => setNewUnidad(e.target.value)} placeholder="Ej. BOLSA 5KG" className="flex-1 border-1.5 border-emerald-200 rounded-lg px-3 py-2 text-xs focus:border-emerald-600 focus:outline-none uppercase" />
               <button type="submit" className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow cursor-pointer"><Plus size={14} />Agregar</button>
             </form>
@@ -140,7 +138,7 @@ export default function AreasTab({
                   {filteredUnidades.map((unidad) => (
                     <tr key={unidad} className="hover:bg-emerald-50">
                       <td className="px-4 py-2 font-semibold text-gray-800 uppercase">{unidad}</td>
-                      <td className="px-4 py-2 text-center w-12"><button onClick={() => { if (confirm(`¿Retirar unidad "${unidad}"?`)) { onRemoveUnidad(unidad); } }} className="text-red-500 hover:text-red-700"><Trash2 size={13} /></button></td>
+                      <td className="px-4 py-2 text-center w-12"><button onClick={() => { if (confirm(`¿Retirar unidad "${unidad}"?`)) { onRemoveUnidad(unidad); } }} className="text-red-500 hover:text-red-700 cursor-pointer"><Trash2 size={13} /></button></td>
                     </tr>
                   ))}
                 </tbody>

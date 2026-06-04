@@ -11,7 +11,7 @@ interface DatabaseTabProps {
   onClearHistory: () => void;
   onSync: () => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'warn' | 'info') => void;
-  onUpdateMovimiento?: (docId: string, newData: any) => Promise<void>; // NUEVO PROP
+  onUpdateMovimiento?: (docId: string, newData: any) => Promise<void>; 
 }
 
 export default function DatabaseTab({
@@ -23,7 +23,7 @@ export default function DatabaseTab({
   const [fechaFin, setFechaFin] = useState('');
   const [showAuditVault, setShowAuditVault] = useState(false);
 
-  // NUEVO ESTADO PARA EL MODAL DE EDICIÓN DE COSTOS
+  // ESTADO PARA EL MODAL DE EDICIÓN DE COSTOS
   const [editModal, setEditModal] = useState<{
     isOpen: boolean;
     mov: Movimiento | null;
@@ -34,6 +34,7 @@ export default function DatabaseTab({
 
   const isRespSalidas = user.role === 'responsable_salidas';
   const isRespEntradas = user.role === 'responsable_entradas';
+  // CANDADO ESTRICTO: Solo administradores
   const isAdmin = user.role === 'admin' || user.role === 'admin_contable';
   const isSup = user.role === 'supervisor' || user.role === 'sup_contable';
   const isConta = user.module === 'CONTABILIDAD';
@@ -98,7 +99,7 @@ export default function DatabaseTab({
     XLSX.utils.book_append_sheet(workbook, worksheet, isConta ? "Diario_Contable" : "Historial_Movimientos");
     const prefix = showAuditVault ? 'Auditoria_Eliminados_' : (isConta ? 'Libro_Diario_' : 'Bitacora_General_');
     XLSX.writeFile(workbook, `${prefix}${user.module}_${new Date().toISOString().slice(0, 10)}.xlsx`);
-    showToast('Archivo Excel generado', 'success');
+    showToast('Archivo Excel generado correctamente', 'success');
   };
 
   const handleClearHistoryConfirm = () => {
@@ -109,7 +110,6 @@ export default function DatabaseTab({
     }
   };
 
-  // FUNCIONES PARA EL MODAL DE EDICIÓN
   const openEdit = (m: Movimiento) => {
     setEditModal({
       isOpen: true, mov: m, prov: m.prov || '', fact: m.fact || '', costoUnit: m.costoUnit ? String(m.costoUnit) : '0'
@@ -140,10 +140,10 @@ export default function DatabaseTab({
           <p className="text-xs md:text-sm text-gray-500 mt-1">{showAuditVault ? 'Visualizando anulados.' : 'Bitácora de movimientos.'}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={onSync} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-50 border border-gray-300 text-gray-700 hover:bg-gray-100 flex items-center gap-1.5"><RefreshCw size={13} /> Sincronizar</button>
-          {isAdmin && (<button onClick={() => setShowAuditVault(!showAuditVault)} className={`px-3 py-1.5 text-xs font-semibold rounded-lg border flex items-center gap-1.5 transition-colors ${showAuditVault ? 'bg-purple-600 text-white border-purple-700' : 'bg-purple-50 text-purple-700 border-purple-200'}`}><ShieldAlert size={13} /> {showAuditVault ? 'Salir de Bóveda' : 'Auditar Eliminados'}</button>)}
-          {(isAdmin || isSup) && (<button onClick={handleExportExcel} className={`px-3 py-1.5 text-xs font-semibold rounded-lg border flex items-center gap-1.5 ${isConta ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}><FileSpreadsheet size={13} /> Descargar Excel</button>)}
-          {isAdmin && showAuditVault && (<button onClick={handleClearHistoryConfirm} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 flex items-center gap-1.5"><Trash size={13} /> Vaciar Bóveda</button>)}
+          <button onClick={onSync} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-50 border border-gray-300 text-gray-700 hover:bg-gray-100 flex items-center gap-1.5 cursor-pointer"><RefreshCw size={13} /> Sincronizar</button>
+          {isAdmin && (<button onClick={() => setShowAuditVault(!showAuditVault)} className={`px-3 py-1.5 text-xs font-semibold rounded-lg border flex items-center gap-1.5 transition-colors cursor-pointer ${showAuditVault ? 'bg-purple-600 text-white border-purple-700' : 'bg-purple-50 text-purple-700 border-purple-200'}`}><ShieldAlert size={13} /> {showAuditVault ? 'Salir de Bóveda' : 'Auditar Eliminados'}</button>)}
+          {(isAdmin || isSup) && (<button onClick={handleExportExcel} className={`px-3 py-1.5 text-xs font-semibold rounded-lg border flex items-center gap-1.5 cursor-pointer ${isConta ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}><FileSpreadsheet size={13} /> Descargar Excel</button>)}
+          {isAdmin && showAuditVault && (<button onClick={handleClearHistoryConfirm} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 flex items-center gap-1.5 cursor-pointer"><Trash size={13} /> Vaciar Bóveda</button>)}
         </div>
       </div>
 
@@ -172,7 +172,7 @@ export default function DatabaseTab({
                   {isConta && <th className="px-4 py-3.5">Identificación Fija</th>}
                   {!isConta && <th className="px-4 py-3.5">Unidad</th>}
                   <th className="px-4 py-3.5">{isConta ? 'Centro Costo' : 'Área de Destino'}</th>
-                  {user.module === 'COMPRAS' && !isConta && <th className="px-4 py-3.5">Detalles Finanzas / Destinatario</th>}
+                  {user.module === 'COMPRAS' && !isConta && <th className="px-4 py-3.5">Detalles Finanzas</th>}
                   <th className="px-4 py-3.5">Comentarios</th><th className="px-4 py-3.5">Usuario</th><th className="px-4 py-3.5 text-center">Acciones</th>
                 </tr>
               </thead>
@@ -226,7 +226,7 @@ export default function DatabaseTab({
                       
                       <td className="px-4 py-3.5 text-center">
                         <div className="flex items-center justify-center gap-1.5">
-                          {/* BOTON DE EDITAR COSTOS: Solo para Entradas/Facturas y solo si es Administrador */}
+                          {/* BOTON DE EDITAR COSTOS: Solo para Administradores */}
                           {!isRowDeleted && isAdmin && (m.tipo === 'ENTRADA' || m.tipo === 'FACTURA_GASTO') && !isAdjustment && (
                             <button onClick={() => openEdit(m)} title="Completar Datos Financieros" className="inline-flex items-center justify-center w-7 h-7 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 transition-all cursor-pointer">
                               <Edit size={13} />

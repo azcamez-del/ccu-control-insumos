@@ -22,7 +22,7 @@ export default function App() {
   const [catalogoMaestro, setCatalogoMaestro] = useState<CatalogoItem[]>([]);
   const [areasMaestras, setAreasMaestras] = useState<string[]>([]);
   const [proveedoresMaestros, setProveedoresMaestros] = useState<string[]>([]);
-  const [unidadesMaestras, setUnidadesMaestras] = useState<string[]>([]); // <-- NUEVO ESTADO DE UNIDADES
+  const [unidadesMaestras, setUnidadesMaestras] = useState<string[]>([]);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'warn' | 'info' | '' } | null>(null);
 
   const [adjustmentModal, setAdjustmentModal] = useState<{
@@ -71,7 +71,6 @@ export default function App() {
       if (list.length === 0 && moduleId === 'COMPRAS') seedDefaultProveedores(moduleId); else setProveedoresMaestros(list);
     }, (error) => { handleFirestoreError(error, OperationType.GET, `modules/${moduleId}/proveedores`); });
 
-    // NUEVO: ESCUCHADOR DE UNIDADES EN LA NUBE
     const qUnidades = query(collection(db, 'modules', moduleId, 'unidades'));
     const unsubUnidades = onSnapshot(qUnidades, (snapshot) => {
       const list: string[] = [];
@@ -153,7 +152,6 @@ export default function App() {
     }
   };
 
-  // HANDLERS PARA CATÁLOGOS
   const handleAddArea = async (area: string) => { if (!currentUser) return; const cl = area.trim().toUpperCase(); try { await setDoc(doc(db, 'modules', currentUser.module, 'areas', cl.replace(/[^a-zA-Z0-9]/g, '_')), { name: cl }); } catch (err) { } };
   const handleRemoveArea = async (area: string) => { if (!currentUser) return; try { await deleteDoc(doc(db, 'modules', currentUser.module, 'areas', area.trim().toUpperCase().replace(/[^a-zA-Z0-9]/g, '_'))); } catch (err) { } };
   const handleAddProv = async (prov: string) => { if (!currentUser) return; const cl = prov.trim().toUpperCase(); try { await setDoc(doc(db, 'modules', currentUser.module, 'proveedores', cl.replace(/[^a-zA-Z0-9]/g, '_')), { name: cl }); } catch (err) { } };
@@ -240,15 +238,46 @@ export default function App() {
             {activeTab === 'reportes' && (isAdmin || isSup) && (<ReportTab user={currentUser} movimientos={movimientos} showToast={showToast} />)}
           </>
         )}
+        
+        {/* RENDER EXCLUSIVO PARA CONTABILIDAD CORREGIDO */}
         {isContabilidad && (
           <>
-            {activeTab === 'captura' && (<AccountingCapture user={currentUser} onSave={handleSaveMovement} areas={areasMaestras} proveedores={proveedoresMaestros} showToast={showToast} />)}
-            {activeTab !== 'captura' && activeTab !== 'areas' && (<div className="bg-white rounded-xl shadow-sm border border-[#ddd9d0] p-16 text-center"><h2 className="text-2xl font-bold text-gray-800 mb-2">Módulo Financiero en Desarrollo 🚧</h2><p className="text-gray-500">Estamos preparando las tablas de reportes e inventarios para Contabilidad. ¡Pronto estarán listas!</p></div>)}
-            {activeTab === 'areas' && (<AreasTab user={currentUser} areas={areasMaestras} proveedores={proveedoresMaestros} unidades={unidadesMaestras} onAddArea={handleAddArea} onRemoveArea={handleRemoveArea} onAddProv={handleAddProv} onRemoveProv={handleRemoveProv} onAddUnidad={handleAddUnidad} onRemoveUnidad={handleRemoveUnidad} showToast={showToast} />)}
+            {activeTab === 'captura' && (
+              <AccountingCapture user={currentUser} onSave={handleSaveMovement} areas={areasMaestras} proveedores={proveedoresMaestros} showToast={showToast} />
+            )}
+            {activeTab === 'inventario' && (
+              <InventoryTab user={currentUser} inventory={currentInventory} onOpenAdjustment={openAdjustmentModal} onDeleteProduct={handleDeleteProduct} showToast={showToast} />
+            )}
+            {activeTab === 'basedatos' && (
+              <DatabaseTab user={currentUser} movimientos={movimientos} onDeleteMovimiento={handleDeleteMovimiento} onClearHistory={handleClearHistory} onSync={syncData} showToast={showToast} />
+            )}
+            {activeTab === 'areas' && (
+              <AreasTab user={currentUser} areas={areasMaestras} proveedores={proveedoresMaestros} unidades={unidadesMaestras} onAddArea={handleAddArea} onRemoveArea={handleRemoveArea} onAddProv={handleAddProv} onRemoveProv={handleRemoveProv} onAddUnidad={handleAddUnidad} onRemoveUnidad={handleRemoveUnidad} showToast={showToast} />
+            )}
+            {activeTab === 'reportes' && (isAdmin || isSup) && (
+              <ReportTab user={currentUser} movimientos={movimientos} showToast={showToast} />
+            )}
           </>
         )}
       </main>
-      {!isContabilidad && adjustmentModal.isOpen && (/* CODIGO DEL MODAL OMITIDO POR BREVEDAD, YA FUNCIONA */ null)}
+      
+      {!isContabilidad && adjustmentModal.isOpen && (
+        <div className="fixed inset-0 bg-[#1a1814]/60 backdrop-blur-xs flex items-center justify-center p-4 z-100 transition-opacity">
+          <div className="bg-white rounded-xl max-w-[500px] w-full p-6 shadow-2xl border border-[#ddd9d0] space-y-4">
+            <h3 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><Scale size={18} className="text-blue-600" /> Ajuste Manual de Auditoría</h3>
+            <p className="text-[11px] text-gray-500">Este registro quedará en la bitácora de auditoría para justificar mermas, conteos físicos o errores manuales.</p>
+            <div className="form-group"><label className="block text-xs font-semibold text-gray-700 mb-1">Producto</label><input type="text" readOnly value={`${adjustmentModal.descripcion} (${adjustmentModal.unidad})`} className="w-full text-xs border border-[#ddd9d0] rounded-lg px-3 py-2 bg-gray-50 text-gray-500" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="form-group pb-0"><label className="block text-xs font-semibold text-gray-700 mb-1">Operación</label><select value={adjustmentModal.tipo} onChange={(e) => setAdjustmentModal(prev => ({ ...prev, tipo: e.target.value as any }))} className="w-full text-xs border border-[#ddd9d0] rounded-lg p-2 bg-white focus:outline-none"><option value="ENTRADA">Sumar (+)</option><option value="SALIDA">Restar (-)</option></select></div>
+              <div className="form-group pb-0"><label className="block text-xs font-semibold text-gray-700 mb-1">Cantidad</label><input type="text" value={adjustmentModal.cantidad} onChange={(e) => setAdjustmentModal(prev => ({ ...prev, cantidad: e.target.value.replace(/[^0-9]/g, '') }))} className="w-full text-xs border border-[#ddd9d0] rounded-lg px-2 py-2 font-bold" /></div>
+            </div>
+            <div className="form-group"><label className="block text-xs font-semibold text-gray-700 mb-1">Fecha</label><input type="date" value={adjustmentModal.fecha} onChange={(e) => setAdjustmentModal(prev => ({ ...prev, fecha: e.target.value }))} className="w-full text-xs border border-[#ddd9d0] rounded-lg px-3 py-2 bg-white" /></div>
+            <div className="form-group"><label className="block text-xs font-semibold text-gray-700 mb-1">Motivo (Obligatorio)</label><input type="text" value={adjustmentModal.notas} onChange={(e) => setAdjustmentModal(prev => ({ ...prev, notas: e.target.value }))} className="w-full text-xs border border-[#ddd9d0] rounded-lg px-3 py-2 uppercase" /></div>
+            <div className="flex justify-end gap-2 pt-3"><button onClick={closeAdjustmentModal} className="px-4 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg">Cancelar</button><button onClick={handleSaveAdjustment} className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg shadow-md">Guardar</button></div>
+          </div>
+        </div>
+      )}
+      
       {toast && <div id="toast" className={`fixed bottom-6 right-6 z-100 border p-3.5 rounded-lg text-xs md:text-sm font-semibold shadow-xl flex items-center gap-2 ${toast.type === 'success' ? 'bg-emerald-600 text-white' : toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'}`}><span>{toast.msg}</span></div>}
     </div>
   );

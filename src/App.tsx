@@ -133,6 +133,17 @@ export default function App() {
     showToast('Documentos registrados', 'success');
   };
 
+  // NUEVA FUNCIÓN PARA EDITAR DATOS (COMO EL COSTO)
+  const handleUpdateMovimiento = async (docId: string, newData: any) => {
+    if (!currentUser) return;
+    try {
+      await setDoc(doc(db, 'modules', currentUser.module, 'movimientos', docId), newData, { merge: true });
+      showToast('Registro actualizado correctamente', 'success');
+    } catch (err) {
+      showToast('Hubo un error al intentar actualizar el registro', 'error');
+    }
+  };
+
   const handleDeleteMovimiento = async (id: number) => {
     if (!currentUser) return; const targetMov = movimientos.find(m => m.id === id); if (!targetMov || !targetMov.docId) return;
     if (confirm("⚠️ ¿Anular movimiento?")) { try { await setDoc(doc(db, 'modules', currentUser.module, 'movimientos', targetMov.docId), { eliminado: true, eliminadoPor: currentUser.name }, { merge: true }); showToast('Anulado', 'warn'); } catch (err) {} }
@@ -204,7 +215,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* NAV PARA INSUMOS Y COMPRAS */}
       {!isContabilidad && (
         <nav id="main-nav" className="bg-white border-b border-[#ddd9d0] px-6 py-0 flex gap-1.5 overflow-x-auto scrollbar-none print:hidden">
           {(isAdmin || isSup || isRespSalidas || isRespAlmacen) && (<button onClick={() => setActiveTab('captura')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'captura' ? 'border-blue-650 text-blue-601 font-bold border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>{isCompras ? <Package size={15} /> : <Database size={15} />} {isCompras ? 'Entregas (Salidas)' : 'Salidas (Despacho)'}</button>)}
@@ -216,7 +226,6 @@ export default function App() {
         </nav>
       )}
 
-      {/* NAV EXCLUSIVO PARA CONTABILIDAD */}
       {isContabilidad && (
         <nav id="main-nav" className="bg-white border-b border-[#ddd9d0] px-6 py-0 flex gap-1.5 overflow-x-auto scrollbar-none print:hidden">
           <button onClick={() => setActiveTab('captura')} className={`nav-btn py-4 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'captura' ? 'border-amber-600 text-amber-700 font-bold' : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}><FileText size={15} /> Ingresar Factura Gasto</button>
@@ -233,30 +242,18 @@ export default function App() {
             {activeTab === 'captura' && (isAdmin || isSup || isRespSalidas || isRespAlmacen) && (<MovementCapture user={currentUser} onSave={handleSaveMovement} inventory={currentInventory} areas={areasMaestras} proveedores={proveedoresMaestros} unidades={unidadesMaestras} type="salida" showToast={showToast} />)}
             {activeTab === 'entradas' && (isAdmin || isSup || isRespEntradas || isRespAlmacen) && (<MovementCapture user={currentUser} onSave={handleSaveMovement} inventory={currentInventory} areas={areasMaestras} proveedores={proveedoresMaestros} unidades={unidadesMaestras} type="entrada" showToast={showToast} />)}
             {activeTab === 'inventario' && (isAdmin || isSup || isRespAlmacen) && (<InventoryTab user={currentUser} inventory={currentInventory} onOpenAdjustment={openAdjustmentModal} onDeleteProduct={handleDeleteProduct} showToast={showToast} />)}
-            {activeTab === 'basedatos' && (<DatabaseTab user={currentUser} movimientos={movimientos} onDeleteMovimiento={handleDeleteMovimiento} onClearHistory={handleClearHistory} onSync={syncData} showToast={showToast} />)}
+            {activeTab === 'basedatos' && (<DatabaseTab user={currentUser} movimientos={movimientos} onDeleteMovimiento={handleDeleteMovimiento} onUpdateMovimiento={handleUpdateMovimiento} onClearHistory={handleClearHistory} onSync={syncData} showToast={showToast} />)}
             {activeTab === 'areas' && (<AreasTab user={currentUser} areas={areasMaestras} proveedores={proveedoresMaestros} unidades={unidadesMaestras} onAddArea={handleAddArea} onRemoveArea={handleRemoveArea} onAddProv={handleAddProv} onRemoveProv={handleRemoveProv} onAddUnidad={handleAddUnidad} onRemoveUnidad={handleRemoveUnidad} showToast={showToast} />)}
             {activeTab === 'reportes' && (isAdmin || isSup) && (<ReportTab user={currentUser} movimientos={movimientos} showToast={showToast} />)}
           </>
         )}
-        
-        {/* RENDER EXCLUSIVO PARA CONTABILIDAD CORREGIDO */}
         {isContabilidad && (
           <>
-            {activeTab === 'captura' && (
-              <AccountingCapture user={currentUser} onSave={handleSaveMovement} areas={areasMaestras} proveedores={proveedoresMaestros} showToast={showToast} />
-            )}
-            {activeTab === 'inventario' && (
-              <InventoryTab user={currentUser} inventory={currentInventory} onOpenAdjustment={openAdjustmentModal} onDeleteProduct={handleDeleteProduct} showToast={showToast} />
-            )}
-            {activeTab === 'basedatos' && (
-              <DatabaseTab user={currentUser} movimientos={movimientos} onDeleteMovimiento={handleDeleteMovimiento} onClearHistory={handleClearHistory} onSync={syncData} showToast={showToast} />
-            )}
-            {activeTab === 'areas' && (
-              <AreasTab user={currentUser} areas={areasMaestras} proveedores={proveedoresMaestros} unidades={unidadesMaestras} onAddArea={handleAddArea} onRemoveArea={handleRemoveArea} onAddProv={handleAddProv} onRemoveProv={handleRemoveProv} onAddUnidad={handleAddUnidad} onRemoveUnidad={handleRemoveUnidad} showToast={showToast} />
-            )}
-            {activeTab === 'reportes' && (isAdmin || isSup) && (
-              <ReportTab user={currentUser} movimientos={movimientos} showToast={showToast} />
-            )}
+            {activeTab === 'captura' && (<AccountingCapture user={currentUser} onSave={handleSaveMovement} areas={areasMaestras} proveedores={proveedoresMaestros} showToast={showToast} />)}
+            {activeTab === 'inventario' && (<InventoryTab user={currentUser} inventory={currentInventory} onOpenAdjustment={openAdjustmentModal} onDeleteProduct={handleDeleteProduct} showToast={showToast} />)}
+            {activeTab === 'basedatos' && (<DatabaseTab user={currentUser} movimientos={movimientos} onDeleteMovimiento={handleDeleteMovimiento} onUpdateMovimiento={handleUpdateMovimiento} onClearHistory={handleClearHistory} onSync={syncData} showToast={showToast} />)}
+            {activeTab === 'areas' && (<AreasTab user={currentUser} areas={areasMaestras} proveedores={proveedoresMaestros} unidades={unidadesMaestras} onAddArea={handleAddArea} onRemoveArea={handleRemoveArea} onAddProv={handleAddProv} onRemoveProv={handleRemoveProv} onAddUnidad={handleAddUnidad} onRemoveUnidad={handleRemoveUnidad} showToast={showToast} />)}
+            {activeTab === 'reportes' && (isAdmin || isSup) && (<ReportTab user={currentUser} movimientos={movimientos} showToast={showToast} />)}
           </>
         )}
       </main>

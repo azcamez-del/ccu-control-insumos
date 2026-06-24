@@ -23,7 +23,6 @@ export default function DatabaseTab({
   const [fechaFin, setFechaFin] = useState('');
   const [showAuditVault, setShowAuditVault] = useState(false);
 
-  // ESTADO PARA EL MODAL DE EDICIÓN DE COSTOS
   const [editModal, setEditModal] = useState<{
     isOpen: boolean;
     mov: Movimiento | null;
@@ -98,7 +97,7 @@ export default function DatabaseTab({
     XLSX.utils.book_append_sheet(workbook, worksheet, isConta ? "Diario_Contable" : "Historial_Movimientos");
     const prefix = showAuditVault ? 'Auditoria_Eliminados_' : (isConta ? 'Libro_Diario_' : 'Bitacora_General_');
     XLSX.writeFile(workbook, `${prefix}${user.module}_${new Date().toISOString().slice(0, 10)}.xlsx`);
-    showToast('Archivo Excel generado', 'success');
+    showToast('Archivo Excel generado correctamente', 'success');
   };
 
   const handleClearHistoryConfirm = () => {
@@ -157,25 +156,30 @@ export default function DatabaseTab({
         <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="w-full text-xs md:text-sm border border-[#ddd9d0] rounded-lg p-2 focus:outline-none" />
       </div>
 
+      {/* AQUÍ ESTÁ EL AJUSTE PERFECTO: Alto automático según tu pantalla */}
       <div className={`bg-white border rounded-xl shadow-sm overflow-hidden ${showAuditVault ? 'border-purple-300' : 'border-[#ddd9d0]'}`}>
         {filteredMovs.length === 0 ? (
           <div className="text-center py-12 text-gray-400"><p className="text-sm md:text-base font-semibold">No hay registros.</p></div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-auto w-full" style={{ maxHeight: 'calc(100vh - 280px)', minHeight: '300px' }}>
             <table className="w-full border-collapse text-left text-xs md:text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b border-[#ddd9d0] font-sans font-bold text-[10px] md:text-xs text-gray-500 tracking-wider uppercase">
-                  <th className="px-4 py-3.5">F. Registro</th><th className="px-4 py-3.5">Tipo</th><th className="px-4 py-3.5">Cant.</th>
-                  <th className="px-4 py-3.5">{isConta ? 'Concepto / Artículo' : 'Descripción'}</th>
-                  {isConta && <th className="px-4 py-3.5">Detalle Factura</th>}
-                  {isConta && <th className="px-4 py-3.5">Identificación Fija</th>}
-                  {!isConta && <th className="px-4 py-3.5">Unidad</th>}
-                  <th className="px-4 py-3.5">{isConta ? 'Centro Costo' : 'Área de Destino'}</th>
-                  {user.module === 'COMPRAS' && <th className="px-4 py-3.5">Detalles Finanzas / Destinatario</th>}
-                  <th className="px-4 py-3.5">Comentarios</th><th className="px-4 py-3.5">Usuario</th><th className="px-4 py-3.5 text-center">Acciones</th>
+              <thead className="sticky top-0 z-20 bg-gray-50 shadow-[0_1px_0_#ddd9d0]">
+                <tr className="font-sans font-bold text-[10px] md:text-xs text-gray-500 tracking-wider uppercase">
+                  <th className="px-4 py-3.5 bg-gray-50">F. Registro</th>
+                  <th className="px-4 py-3.5 bg-gray-50">Tipo</th>
+                  <th className="px-4 py-3.5 bg-gray-50">Cant.</th>
+                  <th className="px-4 py-3.5 bg-gray-50">{isConta ? 'Concepto / Artículo' : 'Descripción'}</th>
+                  {isConta && <th className="px-4 py-3.5 bg-gray-50">Detalle Factura</th>}
+                  {isConta && <th className="px-4 py-3.5 bg-gray-50">Identificación Fija</th>}
+                  {!isConta && <th className="px-4 py-3.5 bg-gray-50">Unidad</th>}
+                  <th className="px-4 py-3.5 bg-gray-50">{isConta ? 'Centro Costo' : 'Área de Destino'}</th>
+                  {user.module === 'COMPRAS' && !isConta && <th className="px-4 py-3.5 bg-gray-50">Detalles Finanzas</th>}
+                  <th className="px-4 py-3.5 bg-gray-50">Comentarios</th>
+                  <th className="px-4 py-3.5 bg-gray-50">Usuario</th>
+                  <th className="px-4 py-3.5 bg-gray-50 text-center">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#ddd9d0] whitespace-nowrap">
+              <tbody className="divide-y divide-[#ddd9d0]">
                 {filteredMovs.map((m) => {
                   const tagColor = m.tipo === 'FACTURA_GASTO' ? 'bg-amber-100 text-amber-800 border-amber-200' : (m.tipo === 'ENTRADA' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200');
                   const isAdjustment = m.area === 'AJUSTE MANUAL';
@@ -183,31 +187,31 @@ export default function DatabaseTab({
 
                   return (
                     <tr key={m.id} className={`hover:bg-gray-50 transition-colors ${isRowDeleted ? 'bg-red-50 text-red-800' : ''}`}>
-                      <td className="px-4 py-3.5 font-mono text-[11px] text-gray-600">{formatearFecha(m.fecha)}</td>
-                      <td className="px-4 py-3.5"><span className={`inline-block border px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${isAdjustment ? 'bg-purple-100 text-purple-700' : tagColor}`}>{m.tipo === 'FACTURA_GASTO' ? 'FACTURA' : m.tipo}</span></td>
-                      <td className="px-4 py-3.5 font-bold text-gray-900">{m.cantidad}</td>
-                      <td className="px-4 py-3.5 font-semibold text-gray-800 font-mono text-[12px]">{m.descripcion} {isConta && <div className="text-[9px] text-gray-500 font-sans mt-0.5 font-bold">{m.categoriaGasto}</div>}</td>
+                      <td className="px-4 py-3.5 font-mono text-[11px] text-gray-600 whitespace-nowrap">{formatearFecha(m.fecha)}</td>
+                      <td className="px-4 py-3.5 whitespace-nowrap"><span className={`inline-block border px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${isAdjustment ? 'bg-purple-100 text-purple-700' : tagColor}`}>{m.tipo === 'FACTURA_GASTO' ? 'FACTURA' : m.tipo}</span></td>
+                      <td className="px-4 py-3.5 font-bold text-gray-900 whitespace-nowrap">{m.cantidad}</td>
+                      <td className="px-4 py-3.5 font-semibold text-gray-800 font-mono text-[12px] min-w-[200px]">{m.descripcion} {isConta && <div className="text-[9px] text-gray-500 font-sans mt-0.5 font-bold">{m.categoriaGasto}</div>}</td>
                       
                       {isConta && (
-                        <td className="px-4 py-3.5 text-[11px] text-gray-600 leading-relaxed whitespace-normal min-w-[180px]">
+                        <td className="px-4 py-3.5 text-[11px] text-gray-600 leading-relaxed min-w-[180px]">
                           <div><b>Prov:</b> {m.prov || '-'}</div><div><b>Folio:</b> {m.fact || '-'}</div>
                           <div className="text-amber-700 font-bold mt-0.5 bg-amber-50 px-1 py-0.5 rounded inline-block border border-amber-100">Imp: ${(m.costoTotal || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
                         </td>
                       )}
                       
                       {isConta && (
-                        <td className="px-4 py-3.5 text-[10px] text-gray-500 font-mono leading-relaxed whitespace-normal min-w-[150px]">
+                        <td className="px-4 py-3.5 text-[10px] text-gray-500 font-mono leading-relaxed min-w-[150px]">
                           {m.marca && <div>Mrc: {m.marca}</div>}{m.modelo && <div>Mod: {m.modelo}</div>}
                           {m.serie && <div className="font-bold text-gray-700 bg-gray-100 px-1 py-0.5 rounded border border-gray-200 mt-0.5">S/N: {m.serie}</div>}
                           {!m.marca && !m.serie && <span>N/A</span>}
                         </td>
                       )}
 
-                      {!isConta && <td className="px-4 py-3.5"><span className="inline-block bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-semibold">{m.unidad}</span></td>}
-                      <td className="px-4 py-3.5 text-gray-600 font-medium">{m.area}</td>
+                      {!isConta && <td className="px-4 py-3.5 whitespace-nowrap"><span className="inline-block bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-semibold">{m.unidad}</span></td>}
+                      <td className="px-4 py-3.5 text-gray-600 font-medium min-w-[150px]">{m.area}</td>
 
-                      {user.module === 'COMPRAS' && (
-                        <td className="px-4 py-3.5 text-[11px] leading-relaxed text-gray-500 whitespace-normal min-w-[200px]">
+                      {user.module === 'COMPRAS' && !isConta && (
+                        <td className="px-4 py-3.5 text-[11px] leading-relaxed text-gray-500 min-w-[220px]">
                           {m.tipo === 'ENTRADA' && !isAdjustment ? (
                             <div>
                               <div><b>Proveedor:</b> {m.prov || '-'}</div><div><b>Factura/Rem:</b> {m.fact || '-'} {m.fechaFact ? `(${formatearFecha(m.fechaFact)})` : ''}</div>
@@ -218,14 +222,13 @@ export default function DatabaseTab({
                         </td>
                       )}
                       
-                      <td className="px-4 py-3.5 text-gray-500 max-w-[200px] truncate whitespace-normal">
+                      <td className="px-4 py-3.5 text-gray-500 min-w-[180px]">
                         {m.notas || ''} {isRowDeleted && <div className="text-[10px] text-red-600 font-bold border-t border-red-200 pt-0.5 mt-1">🗑️ Anulado por: {m.eliminadoPor}</div>}
                       </td>
-                      <td className="px-4 py-3.5 font-medium text-gray-600">{m.registradoPor}</td>
+                      <td className="px-4 py-3.5 font-medium text-gray-600 whitespace-nowrap">{m.registradoPor}</td>
                       
-                      <td className="px-4 py-3.5 text-center">
+                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
-                          {/* BOTON DE EDITAR COSTOS: Bloqueado para Insumos */}
                           {!isRowDeleted && (isAdmin || isSup) && user.module !== 'INSUMOS' && (m.tipo === 'ENTRADA' || m.tipo === 'FACTURA_GASTO') && !isAdjustment && (
                             <button onClick={() => openEdit(m)} title="Completar Datos Financieros" className="inline-flex items-center justify-center w-7 h-7 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 transition-all cursor-pointer">
                               <Edit size={13} />
@@ -246,7 +249,6 @@ export default function DatabaseTab({
         )}
       </div>
 
-      {/* MODAL PARA EDITAR COSTO Y FACTURA */}
       {editModal.isOpen && editModal.mov && (
         <div className="fixed inset-0 bg-[#1a1814]/60 backdrop-blur-xs flex items-center justify-center p-4 z-100 transition-opacity">
           <div className="bg-white rounded-xl max-w-[400px] w-full p-6 shadow-2xl border border-[#ddd9d0] space-y-4">

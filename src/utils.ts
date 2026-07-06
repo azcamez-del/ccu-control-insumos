@@ -7,6 +7,7 @@ export interface InventoryItem {
   salidas: number;
   actual: number;
   tipoCompra: string;
+  notasEliminacion?: string; // NUEVO: Campo para detectar la purga
 }
 
 export function getInventarioActual(movimientos: Movimiento[], catalogoMaestro: CatalogoItem[]): InventoryItem[] {
@@ -23,7 +24,8 @@ export function getInventarioActual(movimientos: Movimiento[], catalogoMaestro: 
       entradas: 0,
       salidas: 0,
       actual: 0,
-      tipoCompra: c.tipoCompra || 'RESURTIBLE'
+      tipoCompra: c.tipoCompra || 'RESURTIBLE',
+      notasEliminacion: ''
     };
   });
 
@@ -42,7 +44,8 @@ export function getInventarioActual(movimientos: Movimiento[], catalogoMaestro: 
         entradas: 0,
         salidas: 0,
         actual: 0,
-        tipoCompra: m.tipoCompra || 'RESURTIBLE'
+        tipoCompra: m.tipoCompra || 'RESURTIBLE',
+        notasEliminacion: ''
       };
     }
     
@@ -51,6 +54,11 @@ export function getInventarioActual(movimientos: Movimiento[], catalogoMaestro: 
       stock[key].entradas += qty;
     } else if (m.tipo === 'SALIDA') {
       stock[key].salidas += qty;
+    }
+
+    // NUEVO: Capturar si el movimiento es la purga del administrador
+    if (m.notas && m.notas.startsWith('[AUDITORÍA]: PRODUCTO ELIMINADO')) {
+      stock[key].notasEliminacion = m.notas;
     }
   });
 

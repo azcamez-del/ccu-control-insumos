@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 import { InventoryItem } from '../utils';
-import { Search, Printer, Download, Scale, Trash } from 'lucide-react';
+import { Search, Printer, Download, Scale, Trash, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface InventoryTabProps {
   user: User;
   inventory: InventoryItem[];
   onOpenAdjustment: (item: { descripcion: string; unidad: string }) => void;
-  onDeleteProduct: (descripcion: string, unidad: string) => void;
+  // ACTUALIZACIÓN: Ahora recibe actualStock para saber cuánto liquidar
+  onDeleteProduct: (descripcion: string, unidad: string, actualStock: number) => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'warn' | 'info') => void;
 }
 
@@ -21,24 +22,41 @@ export default function InventoryTab({
 }: InventoryTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   
+  // NUEVO ESTADO: Controla la ventana de advertencia de borrado
+  const [deleteAlert, setDeleteAlert] = useState<{isOpen: boolean, item: InventoryItem | null}>({isOpen: false, item: null});
+
   const isAdmin = user.role === 'admin' || user.role === 'admin_contable';
   const isConta = user.module === 'CONTABILIDAD';
 
-  const filteredInventory = inventory.filter(item =>
+  // FILTRO INTELIGENTE: Ignora los productos que el admin ya eliminó
+  const validInventory = inventory.filter(item =>
+    !item.notasEliminacion || !item.notasEliminacion.startsWith('[AUDITORÍA]: PRODUCTO ELIMINADO')
+  );
+
+  const filteredInventory = validInventory.filter(item =>
     item.descripcion.toUpperCase().includes(searchTerm.trim().toUpperCase())
   );
 
   const lowStockThreshold = 10;
-  const criticalItemsCount = inventory.filter(i => i.actual > 0 && i.actual <= lowStockThreshold).length;
-  const totalStockItems = inventory.reduce((sum, i) => sum + i.actual, 0);
+  // ACTUALIZACIÓN: Los contadores ahora solo suman el inventario válido
+  const criticalItemsCount = validInventory.filter(i => i.actual > 0 && i.actual <= lowStockThreshold).length;
+  const totalStockItems = validInventory.reduce((sum, i) => sum + i.actual, 0);
+
+  // NUEVA FUNCIÓN: Ejecuta el borrado después de confirmar en la alerta
+  const confirmDelete = () => {
+    if (deleteAlert.item) {
+      onDeleteProduct(deleteAlert.item.descripcion, deleteAlert.item.unidad, deleteAlert.item.actual);
+      setDeleteAlert({isOpen: false, item: null});
+    }
+  };
 
   const handleExportCSV = () => {
-    if (inventory.length === 0) {
+    if (validInventory.length === 0) {
       showToast('No hay mercancías cargadas en el catálogo', 'error');
       return;
     }
     
-    const dataToExport = inventory.map(i => {
+    const dataToExport = validInventory.map(i => {
       const base: any = {
         'ARTÍCULO / CONCEPTO': i.descripcion,
         'MEDIDA / UNIDAD': i.unidad,
@@ -65,7 +83,7 @@ export default function InventoryTab({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#ddd9d0] gap-4">
         <div>
           <h2 className={`text-xl md:text-2xl font-bold font-sans ${isConta ? 'text-amber-800' : 'text-gray-900'}`}>
@@ -99,7 +117,7 @@ export default function InventoryTab({
             {isConta ? 'Total de Conceptos' : 'Catálogo General'}
           </div>
           <div className="text-2xl md:text-3xl font-bold font-mono text-gray-800">
-            {inventory.length} Artículos
+            {validInventory.length} Artículos
           </div>
         </div>
 
@@ -233,7 +251,7 @@ export default function InventoryTab({
                               Ajuste
                             </button>
                             <button
-                              onClick={() => onDeleteProduct(item.descripcion, item.unidad)}
+                              onClick={() => setDeleteAlert({isOpen: true, item: item})}
                               className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 cursor-pointer transition-colors"
                               title="Eliminar del catálogo maestro"
                             >
@@ -251,6 +269,43 @@ export default function InventoryTab({
           </div>
         )}
       </div>
+
+      {/* PANTALLA DE ALERTA DE ELIMINACIÓN */}
+      {deleteAlert.isOpen && deleteAlert.item && (
+        <div className="fixed inset-0 bg-[#1a1814]/60 backdrop-blur-xs flex items-center justify-center p-4 z-100 transition-opacity print:hidden">
+          <div className="bg-white rounded-xl max-w-[450px] w-full p-6 shadow-2xl border border-red-200 space-y-5">
+            <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+                <AlertTriangle size={20} />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">Advertencia de Eliminación</h3>
+            </div>
+            
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600">
+                Estás a punto de eliminar el producto <strong className="text-gray-900">{deleteAlert.item.descripcion}</strong> de la vista del inventario.
+              </p>
+              <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg flex flex-col gap-1">
+                <span className="text-xs font-bold text-amber-800 uppercase tracking-wide">Consecuencias de esta acción:</span>
+                <ul className="text-xs text-amber-700 list-disc list-inside space-y-1">
+                  <li>El producto desaparecerá de las listas.</li>
+                  <li>Se generará un <strong>Ajuste de Salida automático</strong> por <strong>{deleteAlert.item.actual} unidades</strong> para liquidar su stock.</li>
+                  <li>Esta acción quedará registrada en el Historial para revisión de los auditores.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button onClick={() => setDeleteAlert({isOpen: false, item: null})} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-lg cursor-pointer transition-colors">
+                Cancelar
+              </button>
+              <button onClick={confirmDelete} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg shadow-md cursor-pointer transition-colors">
+                Sí, Eliminar Producto
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

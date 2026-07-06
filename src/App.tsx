@@ -133,7 +133,6 @@ export default function App() {
     showToast('Documentos registrados', 'success');
   };
 
-  // NUEVA FUNCIÓN PARA EDITAR DATOS (COMO EL COSTO)
   const handleUpdateMovimiento = async (docId: string, newData: any) => {
     if (!currentUser) return;
     try {
@@ -155,12 +154,30 @@ export default function App() {
     showToast('Bóveda vaciada', 'success');
   };
 
-  const handleDeleteProduct = async (descripcion: string, unidad: string) => {
+  // Función limpia: Ya no lanza "confirm" nativo porque InventoryTab tiene su propio modal
+  const handleDeleteProduct = async (descripcion: string, unidad: string, actualStock: number) => {
     if (!currentUser) return;
-    if (confirm(`⚠️ ¿Eliminar "${descripcion}"?`)) {
-      const docId = `${descripcion.trim().toUpperCase()}___${unidad.trim().toUpperCase()}`.replace(/[^a-zA-Z0-9]/g, '_');
-      try { await deleteDoc(doc(db, 'modules', currentUser.module, 'catalogo', docId)); showToast('Producto eliminado', 'success'); } catch (err) {}
-    }
+    
+    const docId = `${descripcion.trim().toUpperCase()}___${unidad.trim().toUpperCase()}`.replace(/[^a-zA-Z0-9]/g, '_');
+    try {
+      const movIdStr = `${Date.now()}_delete_${Math.floor(Math.random() * 1000)}`;
+      await setDoc(doc(db, 'modules', currentUser.module, 'movimientos', movIdStr), {
+        id: Date.now(), 
+        tipo: 'SALIDA', 
+        fecha: new Date().toISOString().split('T')[0], 
+        cantidad: actualStock > 0 ? actualStock : 0, 
+        descripcion: descripcion.trim().toUpperCase(), 
+        unidad: unidad.trim().toUpperCase(), 
+        area: 'AJUSTE MANUAL', 
+        notas: `[AUDITORÍA]: PRODUCTO ELIMINADO DEL SISTEMA (STOCK PREVIO: ${actualStock})`, 
+        registradoPor: currentUser.name, 
+        eliminado: false, 
+        timestamp: Date.now() 
+      });
+
+      await deleteDoc(doc(db, 'modules', currentUser.module, 'catalogo', docId));
+      showToast('Producto eliminado permanentemente del sistema', 'success');
+    } catch (err) {}
   };
 
   const handleAddArea = async (area: string) => { if (!currentUser) return; const cl = area.trim().toUpperCase(); try { await setDoc(doc(db, 'modules', currentUser.module, 'areas', cl.replace(/[^a-zA-Z0-9]/g, '_')), { name: cl }); } catch (err) { } };
@@ -236,15 +253,15 @@ export default function App() {
         </nav>
       )}
 
-      <main className="flex-1 py-8 px-6 max-w-7xl mx-auto w-full">
+      <main className="flex-1 py-8 px-4 md:px-6 w-full max-w-[98%] mx-auto">
         {!isContabilidad && (
           <>
-            {activeTab === 'captura' && (isAdmin || isSup || isRespSalidas || isRespAlmacen) && (<MovementCapture user={currentUser} onSave={handleSaveMovement} inventory={currentInventory} areas={areasMaestras} proveedores={proveedoresMaestros} unidades={unidadesMaestras} type="salida" showToast={showToast} />)}
-            {activeTab === 'entradas' && (isAdmin || isSup || isRespEntradas || isRespAlmacen) && (<MovementCapture user={currentUser} onSave={handleSaveMovement} inventory={currentInventory} areas={areasMaestras} proveedores={proveedoresMaestros} unidades={unidadesMaestras} type="entrada" showToast={showToast} />)}
-            {activeTab === 'inventario' && (isAdmin || isSup || isRespAlmacen) && (<InventoryTab user={currentUser} inventory={currentInventory} onOpenAdjustment={openAdjustmentModal} onDeleteProduct={handleDeleteProduct} showToast={showToast} />)}
+            {activeTab === 'captura' && (<MovementCapture user={currentUser} onSave={handleSaveMovement} inventory={currentInventory} areas={areasMaestras} proveedores={proveedoresMaestros} unidades={unidadesMaestras} type="salida" showToast={showToast} />)}
+            {activeTab === 'entradas' && (<MovementCapture user={currentUser} onSave={handleSaveMovement} inventory={currentInventory} areas={areasMaestras} proveedores={proveedoresMaestros} unidades={unidadesMaestras} type="entrada" showToast={showToast} />)}
+            {activeTab === 'inventario' && (<InventoryTab user={currentUser} inventory={currentInventory} onOpenAdjustment={openAdjustmentModal} onDeleteProduct={handleDeleteProduct} showToast={showToast} />)}
             {activeTab === 'basedatos' && (<DatabaseTab user={currentUser} movimientos={movimientos} onDeleteMovimiento={handleDeleteMovimiento} onUpdateMovimiento={handleUpdateMovimiento} onClearHistory={handleClearHistory} onSync={syncData} showToast={showToast} />)}
             {activeTab === 'areas' && (<AreasTab user={currentUser} areas={areasMaestras} proveedores={proveedoresMaestros} unidades={unidadesMaestras} onAddArea={handleAddArea} onRemoveArea={handleRemoveArea} onAddProv={handleAddProv} onRemoveProv={handleRemoveProv} onAddUnidad={handleAddUnidad} onRemoveUnidad={handleRemoveUnidad} showToast={showToast} />)}
-            {activeTab === 'reportes' && (isAdmin || isSup) && (<ReportTab user={currentUser} movimientos={movimientos} showToast={showToast} />)}
+            {activeTab === 'reportes' && (<ReportTab user={currentUser} movimientos={movimientos} showToast={showToast} />)}
           </>
         )}
         {isContabilidad && (
@@ -253,7 +270,7 @@ export default function App() {
             {activeTab === 'inventario' && (<InventoryTab user={currentUser} inventory={currentInventory} onOpenAdjustment={openAdjustmentModal} onDeleteProduct={handleDeleteProduct} showToast={showToast} />)}
             {activeTab === 'basedatos' && (<DatabaseTab user={currentUser} movimientos={movimientos} onDeleteMovimiento={handleDeleteMovimiento} onUpdateMovimiento={handleUpdateMovimiento} onClearHistory={handleClearHistory} onSync={syncData} showToast={showToast} />)}
             {activeTab === 'areas' && (<AreasTab user={currentUser} areas={areasMaestras} proveedores={proveedoresMaestros} unidades={unidadesMaestras} onAddArea={handleAddArea} onRemoveArea={handleRemoveArea} onAddProv={handleAddProv} onRemoveProv={handleRemoveProv} onAddUnidad={handleAddUnidad} onRemoveUnidad={handleRemoveUnidad} showToast={showToast} />)}
-            {activeTab === 'reportes' && (isAdmin || isSup) && (<ReportTab user={currentUser} movimientos={movimientos} showToast={showToast} />)}
+            {activeTab === 'reportes' && (<ReportTab user={currentUser} movimientos={movimientos} showToast={showToast} />)}
           </>
         )}
       </main>
@@ -270,7 +287,7 @@ export default function App() {
             </div>
             <div className="form-group"><label className="block text-xs font-semibold text-gray-700 mb-1">Fecha</label><input type="date" value={adjustmentModal.fecha} onChange={(e) => setAdjustmentModal(prev => ({ ...prev, fecha: e.target.value }))} className="w-full text-xs border border-[#ddd9d0] rounded-lg px-3 py-2 bg-white" /></div>
             <div className="form-group"><label className="block text-xs font-semibold text-gray-700 mb-1">Motivo (Obligatorio)</label><input type="text" value={adjustmentModal.notas} onChange={(e) => setAdjustmentModal(prev => ({ ...prev, notas: e.target.value }))} className="w-full text-xs border border-[#ddd9d0] rounded-lg px-3 py-2 uppercase" /></div>
-            <div className="flex justify-end gap-2 pt-3"><button onClick={closeAdjustmentModal} className="px-4 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg">Cancelar</button><button onClick={handleSaveAdjustment} className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg shadow-md">Guardar</button></div>
+            <div className="flex justify-end gap-2 pt-3"><button onClick={closeAdjustmentModal} className="px-4 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg cursor-pointer">Cancelar</button><button onClick={handleSaveAdjustment} className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg shadow-md cursor-pointer">Guardar</button></div>
           </div>
         </div>
       )}

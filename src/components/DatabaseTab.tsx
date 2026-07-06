@@ -23,6 +23,7 @@ export default function DatabaseTab({
   const [fechaFin, setFechaFin] = useState('');
   const [showAuditVault, setShowAuditVault] = useState(false);
 
+  // ESTADO PARA EL MODAL DE EDICIÓN DE COSTOS
   const [editModal, setEditModal] = useState<{
     isOpen: boolean;
     mov: Movimiento | null;
@@ -33,6 +34,7 @@ export default function DatabaseTab({
 
   const isRespSalidas = user.role === 'responsable_salidas';
   const isRespEntradas = user.role === 'responsable_entradas';
+  // CANDADO ESTRICTO: Solo administradores
   const isAdmin = user.role === 'admin' || user.role === 'admin_contable';
   const isSup = user.role === 'supervisor' || user.role === 'sup_contable';
   const isConta = user.module === 'CONTABILIDAD';
@@ -129,13 +131,16 @@ export default function DatabaseTab({
   };
 
   return (
-    <div className="space-y-6 relative">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#ddd9d0] gap-4">
+    // ESTA LÍNEA ES LA MAGIA: h-[calc(100vh-180px)] fija el tamaño exacto al de tu monitor
+    <div className="flex flex-col space-y-4 w-full relative" style={{ height: 'calc(100vh - 180px)', minHeight: '400px' }}>
+      
+      {/* ENCABEZADO (Fijo arriba) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-[#ddd9d0] gap-4 shrink-0">
         <div>
           <h2 className={`text-xl md:text-2xl font-bold font-sans ${showAuditVault ? 'text-purple-800' : (isConta ? 'text-amber-800' : 'text-gray-900')}`}>
             {showAuditVault ? '🛡️ Bóveda de Auditoría (Eliminados)' : (isConta ? 'Historial y Diario Contable' : 'Historial de Movimientos')}
           </h2>
-          <p className="text-xs md:text-sm text-gray-500 mt-1">{showAuditVault ? 'Visualizando anulados.' : 'Bitácora de movimientos.'}</p>
+          <p className="text-xs md:text-sm text-gray-500 mt-0.5">{showAuditVault ? 'Visualizando anulados.' : 'Bitácora de movimientos.'}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={onSync} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-50 border border-gray-300 text-gray-700 hover:bg-gray-100 flex items-center gap-1.5 cursor-pointer"><RefreshCw size={13} /> Sincronizar</button>
@@ -145,7 +150,8 @@ export default function DatabaseTab({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 bg-white border border-[#ddd9d0] p-4 rounded-xl shadow-sm">
+      {/* FILTROS (Fijos arriba) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 bg-white border border-[#ddd9d0] p-3 md:p-4 rounded-xl shadow-sm shrink-0">
         {!isConta && !isRespSalidas && !isRespEntradas ? (
           <select value={tipoFilter} onChange={(e) => setTipoFilter(e.target.value)} className="w-full text-xs md:text-sm border border-[#ddd9d0] rounded-lg p-2 bg-white focus:outline-none"><option value="">Todos los movimientos</option><option value="ENTRADA">Solo Entradas</option><option value="SALIDA">Solo Salidas</option></select>
         ) : isConta ? (
@@ -156,99 +162,94 @@ export default function DatabaseTab({
         <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="w-full text-xs md:text-sm border border-[#ddd9d0] rounded-lg p-2 focus:outline-none" />
       </div>
 
-      {/* AQUÍ ESTÁ EL AJUSTE PERFECTO: Alto automático según tu pantalla */}
-      <div className={`bg-white border rounded-xl shadow-sm overflow-hidden ${showAuditVault ? 'border-purple-300' : 'border-[#ddd9d0]'}`}>
+      {/* CONTENEDOR DE LA TABLA (Toma el espacio restante y habilita scrolls) */}
+      <div className={`flex-1 min-h-0 bg-white border rounded-xl shadow-sm overflow-auto ${showAuditVault ? 'border-purple-300' : 'border-[#ddd9d0]'}`}>
         {filteredMovs.length === 0 ? (
           <div className="text-center py-12 text-gray-400"><p className="text-sm md:text-base font-semibold">No hay registros.</p></div>
         ) : (
-          <div className="overflow-auto w-full" style={{ maxHeight: 'calc(100vh - 280px)', minHeight: '300px' }}>
-            <table className="w-full border-collapse text-left text-xs md:text-sm">
-              <thead className="sticky top-0 z-20 bg-gray-50 shadow-[0_1px_0_#ddd9d0]">
-                <tr className="font-sans font-bold text-[10px] md:text-xs text-gray-500 tracking-wider uppercase">
-                  <th className="px-4 py-3.5 bg-gray-50">F. Registro</th>
-                  <th className="px-4 py-3.5 bg-gray-50">Tipo</th>
-                  <th className="px-4 py-3.5 bg-gray-50">Cant.</th>
-                  <th className="px-4 py-3.5 bg-gray-50">{isConta ? 'Concepto / Artículo' : 'Descripción'}</th>
-                  {isConta && <th className="px-4 py-3.5 bg-gray-50">Detalle Factura</th>}
-                  {isConta && <th className="px-4 py-3.5 bg-gray-50">Identificación Fija</th>}
-                  {!isConta && <th className="px-4 py-3.5 bg-gray-50">Unidad</th>}
-                  <th className="px-4 py-3.5 bg-gray-50">{isConta ? 'Centro Costo' : 'Área de Destino'}</th>
-                  {user.module === 'COMPRAS' && !isConta && <th className="px-4 py-3.5 bg-gray-50">Detalles Finanzas</th>}
-                  <th className="px-4 py-3.5 bg-gray-50">Comentarios</th>
-                  <th className="px-4 py-3.5 bg-gray-50">Usuario</th>
-                  <th className="px-4 py-3.5 bg-gray-50 text-center">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#ddd9d0]">
-                {filteredMovs.map((m) => {
-                  const tagColor = m.tipo === 'FACTURA_GASTO' ? 'bg-amber-100 text-amber-800 border-amber-200' : (m.tipo === 'ENTRADA' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200');
-                  const isAdjustment = m.area === 'AJUSTE MANUAL';
-                  const isRowDeleted = m.eliminado;
+          <table className="w-full border-collapse text-left text-xs md:text-sm">
+            <thead className="sticky top-0 z-20 bg-gray-50 shadow-[0_1px_0_#ddd9d0]">
+              <tr className="font-sans font-bold text-[10px] md:text-xs text-gray-500 tracking-wider uppercase">
+                <th className="px-4 py-3.5 bg-gray-50">F. Registro</th><th className="px-4 py-3.5 bg-gray-50">Tipo</th><th className="px-4 py-3.5 bg-gray-50">Cant.</th>
+                <th className="px-4 py-3.5 bg-gray-50">{isConta ? 'Concepto / Artículo' : 'Descripción'}</th>
+                {isConta && <th className="px-4 py-3.5 bg-gray-50">Detalle Factura</th>}
+                {isConta && <th className="px-4 py-3.5 bg-gray-50">Identificación Fija</th>}
+                {!isConta && <th className="px-4 py-3.5 bg-gray-50">Unidad</th>}
+                <th className="px-4 py-3.5 bg-gray-50">{isConta ? 'Centro Costo' : 'Área de Destino'}</th>
+                {user.module === 'COMPRAS' && !isConta && <th className="px-4 py-3.5 bg-gray-50">Detalles Finanzas</th>}
+                <th className="px-4 py-3.5 bg-gray-50">Comentarios</th><th className="px-4 py-3.5 bg-gray-50">Usuario</th><th className="px-4 py-3.5 bg-gray-50 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#ddd9d0]">
+              {filteredMovs.map((m) => {
+                const tagColor = m.tipo === 'FACTURA_GASTO' ? 'bg-amber-100 text-amber-800 border-amber-200' : (m.tipo === 'ENTRADA' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200');
+                const isAdjustment = m.area === 'AJUSTE MANUAL';
+                const isRowDeleted = m.eliminado;
 
-                  return (
-                    <tr key={m.id} className={`hover:bg-gray-50 transition-colors ${isRowDeleted ? 'bg-red-50 text-red-800' : ''}`}>
-                      <td className="px-4 py-3.5 font-mono text-[11px] text-gray-600 whitespace-nowrap">{formatearFecha(m.fecha)}</td>
-                      <td className="px-4 py-3.5 whitespace-nowrap"><span className={`inline-block border px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${isAdjustment ? 'bg-purple-100 text-purple-700' : tagColor}`}>{m.tipo === 'FACTURA_GASTO' ? 'FACTURA' : m.tipo}</span></td>
-                      <td className="px-4 py-3.5 font-bold text-gray-900 whitespace-nowrap">{m.cantidad}</td>
-                      <td className="px-4 py-3.5 font-semibold text-gray-800 font-mono text-[12px] min-w-[200px]">{m.descripcion} {isConta && <div className="text-[9px] text-gray-500 font-sans mt-0.5 font-bold">{m.categoriaGasto}</div>}</td>
-                      
-                      {isConta && (
-                        <td className="px-4 py-3.5 text-[11px] text-gray-600 leading-relaxed min-w-[180px]">
-                          <div><b>Prov:</b> {m.prov || '-'}</div><div><b>Folio:</b> {m.fact || '-'}</div>
-                          <div className="text-amber-700 font-bold mt-0.5 bg-amber-50 px-1 py-0.5 rounded inline-block border border-amber-100">Imp: ${(m.costoTotal || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
-                        </td>
-                      )}
-                      
-                      {isConta && (
-                        <td className="px-4 py-3.5 text-[10px] text-gray-500 font-mono leading-relaxed min-w-[150px]">
-                          {m.marca && <div>Mrc: {m.marca}</div>}{m.modelo && <div>Mod: {m.modelo}</div>}
-                          {m.serie && <div className="font-bold text-gray-700 bg-gray-100 px-1 py-0.5 rounded border border-gray-200 mt-0.5">S/N: {m.serie}</div>}
-                          {!m.marca && !m.serie && <span>N/A</span>}
-                        </td>
-                      )}
-
-                      {!isConta && <td className="px-4 py-3.5 whitespace-nowrap"><span className="inline-block bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-semibold">{m.unidad}</span></td>}
-                      <td className="px-4 py-3.5 text-gray-600 font-medium min-w-[150px]">{m.area}</td>
-
-                      {user.module === 'COMPRAS' && !isConta && (
-                        <td className="px-4 py-3.5 text-[11px] leading-relaxed text-gray-500 min-w-[220px]">
-                          {m.tipo === 'ENTRADA' && !isAdjustment ? (
-                            <div>
-                              <div><b>Proveedor:</b> {m.prov || '-'}</div><div><b>Factura/Rem:</b> {m.fact || '-'} {m.fechaFact ? `(${formatearFecha(m.fechaFact)})` : ''}</div>
-                              <div><b>Costo U:</b> ${(m.costoUnit || 0).toLocaleString('en-US')} (Total: ${(m.costoTotal || 0).toLocaleString('en-US')})</div>
-                              <div><b>N° Aut:</b> {m.aut || '-'}</div>
-                            </div>
-                          ) : m.tipo === 'SALIDA' && !isAdjustment ? (<div><div><b>Recibe:</b> {m.recibe || '-'}</div><div><b>Resp. Área:</b> {m.resp || '-'}</div></div>) : <span className="text-gray-400">—</span>}
-                        </td>
-                      )}
-                      
-                      <td className="px-4 py-3.5 text-gray-500 min-w-[180px]">
-                        {m.notas || ''} {isRowDeleted && <div className="text-[10px] text-red-600 font-bold border-t border-red-200 pt-0.5 mt-1">🗑️ Anulado por: {m.eliminadoPor}</div>}
+                return (
+                  <tr key={m.id} className={`hover:bg-gray-50 transition-colors ${isRowDeleted ? 'bg-red-50 text-red-800' : ''}`}>
+                    <td className="px-4 py-3.5 font-mono text-[11px] text-gray-600 whitespace-nowrap">{formatearFecha(m.fecha)}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap"><span className={`inline-block border px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${isAdjustment ? 'bg-purple-100 text-purple-700' : tagColor}`}>{m.tipo === 'FACTURA_GASTO' ? 'FACTURA' : m.tipo}</span></td>
+                    <td className="px-4 py-3.5 font-bold text-gray-900 whitespace-nowrap">{m.cantidad}</td>
+                    <td className="px-4 py-3.5 font-semibold text-gray-800 font-mono text-[12px] min-w-[200px]">{m.descripcion} {isConta && <div className="text-[9px] text-gray-500 font-sans mt-0.5 font-bold">{m.categoriaGasto}</div>}</td>
+                    
+                    {isConta && (
+                      <td className="px-4 py-3.5 text-[11px] text-gray-600 leading-relaxed min-w-[180px]">
+                        <div><b>Prov:</b> {m.prov || '-'}</div><div><b>Folio:</b> {m.fact || '-'}</div>
+                        <div className="text-amber-700 font-bold mt-0.5 bg-amber-50 px-1 py-0.5 rounded inline-block border border-amber-100">Imp: ${(m.costoTotal || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
                       </td>
-                      <td className="px-4 py-3.5 font-medium text-gray-600 whitespace-nowrap">{m.registradoPor}</td>
-                      
-                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {!isRowDeleted && (isAdmin || isSup) && user.module !== 'INSUMOS' && (m.tipo === 'ENTRADA' || m.tipo === 'FACTURA_GASTO') && !isAdjustment && (
-                            <button onClick={() => openEdit(m)} title="Completar Datos Financieros" className="inline-flex items-center justify-center w-7 h-7 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 transition-all cursor-pointer">
-                              <Edit size={13} />
-                            </button>
-                          )}
-
-                          {!isRowDeleted ? (
-                            <button onClick={() => onDeleteMovimiento(m.id)} title="Anular Movimiento" className="inline-flex items-center justify-center w-7 h-7 rounded bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 transition-all cursor-pointer">✕</button>
-                          ) : <span className="text-xs font-mono text-red-500 font-bold uppercase">Anulado</span>}
-                        </div>
+                    )}
+                    
+                    {isConta && (
+                      <td className="px-4 py-3.5 text-[10px] text-gray-500 font-mono leading-relaxed min-w-[150px]">
+                        {m.marca && <div>Mrc: {m.marca}</div>}{m.modelo && <div>Mod: {m.modelo}</div>}
+                        {m.serie && <div className="font-bold text-gray-700 bg-gray-100 px-1 py-0.5 rounded border border-gray-200 mt-0.5">S/N: {m.serie}</div>}
+                        {!m.marca && !m.serie && <span>N/A</span>}
                       </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                    )}
+
+                    {!isConta && <td className="px-4 py-3.5 whitespace-nowrap"><span className="inline-block bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-semibold">{m.unidad}</span></td>}
+                    <td className="px-4 py-3.5 text-gray-600 font-medium min-w-[150px]">{m.area}</td>
+
+                    {user.module === 'COMPRAS' && !isConta && (
+                      <td className="px-4 py-3.5 text-[11px] leading-relaxed text-gray-500 min-w-[220px]">
+                        {m.tipo === 'ENTRADA' && !isAdjustment ? (
+                          <div>
+                            <div><b>Proveedor:</b> {m.prov || '-'}</div><div><b>Factura/Rem:</b> {m.fact || '-'} {m.fechaFact ? `(${formatearFecha(m.fechaFact)})` : ''}</div>
+                            <div><b>Costo U:</b> ${(m.costoUnit || 0).toLocaleString('en-US')} (Total: ${(m.costoTotal || 0).toLocaleString('en-US')})</div>
+                            <div><b>N° Aut:</b> {m.aut || '-'}</div>
+                          </div>
+                        ) : m.tipo === 'SALIDA' && !isAdjustment ? (<div><div><b>Recibe:</b> {m.recibe || '-'}</div><div><b>Resp. Área:</b> {m.resp || '-'}</div></div>) : <span className="text-gray-400">—</span>}
+                      </td>
+                    )}
+                    
+                    <td className="px-4 py-3.5 text-gray-500 min-w-[180px]">
+                      {m.notas || ''} {isRowDeleted && <div className="text-[10px] text-red-600 font-bold border-t border-red-200 pt-0.5 mt-1">🗑️ Anulado por: {m.eliminadoPor}</div>}
+                    </td>
+                    <td className="px-4 py-3.5 font-medium text-gray-600 whitespace-nowrap">{m.registradoPor}</td>
+                    
+                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1.5">
+                        {!isRowDeleted && (isAdmin || isSup) && user.module !== 'INSUMOS' && (m.tipo === 'ENTRADA' || m.tipo === 'FACTURA_GASTO') && !isAdjustment && (
+                          <button onClick={() => openEdit(m)} title="Completar Datos Financieros" className="inline-flex items-center justify-center w-7 h-7 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 transition-all cursor-pointer">
+                            <Edit size={13} />
+                          </button>
+                        )}
+
+                        {!isRowDeleted ? (
+                          <button onClick={() => onDeleteMovimiento(m.id)} title="Anular Movimiento" className="inline-flex items-center justify-center w-7 h-7 rounded bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 transition-all cursor-pointer">✕</button>
+                        ) : <span className="text-xs font-mono text-red-500 font-bold uppercase">Anulado</span>}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         )}
       </div>
 
+      {/* MODAL PARA EDITAR COSTO Y FACTURA */}
       {editModal.isOpen && editModal.mov && (
         <div className="fixed inset-0 bg-[#1a1814]/60 backdrop-blur-xs flex items-center justify-center p-4 z-100 transition-opacity">
           <div className="bg-white rounded-xl max-w-[400px] w-full p-6 shadow-2xl border border-[#ddd9d0] space-y-4">

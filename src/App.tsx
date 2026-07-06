@@ -154,22 +154,26 @@ export default function App() {
     showToast('Bóveda vaciada', 'success');
   };
 
-  // Función limpia: Ya no lanza "confirm" nativo porque InventoryTab tiene su propio modal
+  // Función corregida con alerta de errores
   const handleDeleteProduct = async (descripcion: string, unidad: string, actualStock: number) => {
     if (!currentUser) return;
     
+    // Asegurarnos de que el stock a liquidar sea un número válido
+    const stockToLiquidate = Number(actualStock) || 0;
     const docId = `${descripcion.trim().toUpperCase()}___${unidad.trim().toUpperCase()}`.replace(/[^a-zA-Z0-9]/g, '_');
+    
     try {
       const movIdStr = `${Date.now()}_delete_${Math.floor(Math.random() * 1000)}`;
+      
       await setDoc(doc(db, 'modules', currentUser.module, 'movimientos', movIdStr), {
         id: Date.now(), 
         tipo: 'SALIDA', 
         fecha: new Date().toISOString().split('T')[0], 
-        cantidad: actualStock > 0 ? actualStock : 0, 
+        cantidad: stockToLiquidate, 
         descripcion: descripcion.trim().toUpperCase(), 
         unidad: unidad.trim().toUpperCase(), 
         area: 'AJUSTE MANUAL', 
-        notas: `[AUDITORÍA]: PRODUCTO ELIMINADO DEL SISTEMA (STOCK PREVIO: ${actualStock})`, 
+        notas: `[AUDITORÍA]: PRODUCTO ELIMINADO DEL SISTEMA (STOCK PREVIO: ${stockToLiquidate})`, 
         registradoPor: currentUser.name, 
         eliminado: false, 
         timestamp: Date.now() 
@@ -177,7 +181,10 @@ export default function App() {
 
       await deleteDoc(doc(db, 'modules', currentUser.module, 'catalogo', docId));
       showToast('Producto eliminado permanentemente del sistema', 'success');
-    } catch (err) {}
+    } catch (err) {
+      console.error("Error al borrar en Firebase:", err);
+      showToast('Hubo un error al intentar eliminar. Revisa tu conexión.', 'error');
+    }
   };
 
   const handleAddArea = async (area: string) => { if (!currentUser) return; const cl = area.trim().toUpperCase(); try { await setDoc(doc(db, 'modules', currentUser.module, 'areas', cl.replace(/[^a-zA-Z0-9]/g, '_')), { name: cl }); } catch (err) { } };
